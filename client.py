@@ -82,6 +82,7 @@ def handle_server_response(command, client_socket):
         except FileNotFoundError:
             print("file not found")
             return "file", "FileNotFound"
+    return "exit", 0
 
 
 def send_basic_info(client_socket):

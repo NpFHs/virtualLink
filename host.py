@@ -140,8 +140,10 @@ def main():
 
                 else:
 
-                    print("Wrong message type!")
+                    print(f"Wrong message type! ({msg_type})")
             except RuntimeError:
+                break
+            except OSError:
                 break
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

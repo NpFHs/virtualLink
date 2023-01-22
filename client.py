@@ -67,17 +67,21 @@ def handle_server_response(command, client_socket):
 
     elif cmd_type == "file":
         file_name = cmd
-        file_size = os.path.getsize(file_name)
-        send_response(client_socket, "file", f"{file_name} {file_size}")
+        try:
+            file_size = os.path.getsize(file_name)
+            send_response(client_socket, "file", f"{file_name} {file_size}")
 
-        with open(file_name, "rb") as file:
-            while True:
-                bytes_read = file.read(BUFFER_SIZE)
-                if len(bytes_read) == 0:
-                    break
-                send_response(client_socket, "filepart", bytes_read)
-        print("done")
-        return "file", "done"
+            with open(file_name, "rb") as file:
+                while True:
+                    bytes_read = file.read(BUFFER_SIZE)
+                    if len(bytes_read) == 0:
+                        break
+                    send_response(client_socket, "filepart", bytes_read)
+            print("done")
+            return "file", "done"
+        except FileNotFoundError:
+            print("file not found")
+            return "file", "FileNotFound"
 
 
 def send_basic_info(client_socket):

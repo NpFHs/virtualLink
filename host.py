@@ -117,23 +117,26 @@ def main():
                     msg_list.see(tk.END)
 
                 elif msg_type == "file":
-                    file_name, file_size = msg.split()
-                    file_name = os.path.basename(file_name)
-                    # file_size = int(file_size)
-                    with open(file_name, "wb") as file:
-                        while True:
-                            msg_len = client_socket.recv(8)
-                            if msg_len.isdigit():
-                                bytes_file = client_socket.recv(int(msg_len))
-                            else:
-                                print("No length info!")
-                                client_socket.recv(16777216)
-                                bytes_file = "Error".encode()
+                    if msg.split()[0] == "FileNotFound":
+                        print("file not found!")
+                    else:
+                        file_name, file_size = msg.split()
+                        file_name = os.path.basename(file_name)
+                        # file_size = int(file_size)
+                        with open(file_name, "wb") as file:
+                            while True:
+                                msg_len = client_socket.recv(8)
+                                if msg_len.isdigit():
+                                    bytes_file = client_socket.recv(int(msg_len))
+                                else:
+                                    print("No length info!")
+                                    client_socket.recv(16777216)
+                                    bytes_file = "Error".encode()
 
-                            if bytes_file == "file done".encode():  # TODO: find better way to stop the loop
-                                break
-                            file.write(bytes_file)
-                        files.set(f"{files.get()}\n{file_name}".strip("\n"))
+                                if bytes_file == "file done".encode():  # TODO: find better way to stop the loop
+                                    break
+                                file.write(bytes_file)
+                            files.set(f"{files.get()}\n{file_name}".strip("\n"))
 
                 else:
 

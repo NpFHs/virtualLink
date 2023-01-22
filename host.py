@@ -1,7 +1,7 @@
 import os.path
 import tkinter as tk
 from tkinter import ttk
-# from ttkthemes import ThemedStyle
+from ttkthemes import ThemedStyle
 import socket
 from threading import *
 
@@ -82,14 +82,12 @@ def browse_files(win, client_socket):
 
 def main():
     root = tk.Tk()
-    root.tk.call("source", "azure.tcl")
-    root.tk.call("set_theme", "dark")
-    # style = ThemedStyle(root)
-    # style.set_theme("adapta")
+    style = ThemedStyle(root)
+    style.set_theme("adapta")
     root.title("Remote Control")
     root.geometry("800x600")
     tab_frame = ttk.Notebook()
-    tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+    tab_frame.pack(side="top", fill="both", expand=True)
     client_dist = tk.StringVar(value="Unknown")
     client_name = tk.StringVar(value="Unknown")
     files = tk.StringVar()

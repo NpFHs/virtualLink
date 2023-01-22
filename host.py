@@ -87,7 +87,7 @@ def main():
     root.tk.call("source", "azure.tcl")
     root.tk.call("set_theme", "dark")
     root.title("Remote Control")
-    root.geometry("800x600")
+    root.geometry("800x610")
     tab_frame = ttk.Notebook()
     tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
     client_dist = tk.StringVar(value="Unknown")

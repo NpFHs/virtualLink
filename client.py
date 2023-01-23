@@ -17,6 +17,7 @@ power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
 
 
 def send_response(client_socket, msg_type, msg):
+    # TODO: split long commands to many packets
     path = os.getcwd()
 
     if msg_type == "filepart":

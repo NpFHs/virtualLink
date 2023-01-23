@@ -1,7 +1,7 @@
 import socket
 import os
 import platform
-
+import encryption
 
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()

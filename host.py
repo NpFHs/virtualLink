@@ -4,7 +4,7 @@ from tkinter import ttk
 from ttkthemes import ThemedStyle
 import socket
 from threading import *
-import rsa
+import encryption
 
 IP: str = "0.0.0.0"
 PORT: int = 8091

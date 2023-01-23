@@ -18,19 +18,22 @@ PORT: int = 8091
 
 def shutdown(client_socket):
     command = f"power shutdown"
-    client_socket.send(command.encode())
+    enc_command = encryption.encrypt(command)
+    client_socket.send(enc_command)
     print(command)
 
 
 def restart(client_socket):
     command = f"power restart"
-    client_socket.send(command.encode())
+    enc_command = encryption.encrypt(command)
+    client_socket.send(enc_command)
     print(command)
 
 
 def log_out(client_socket):
     command = f"power log_out"
-    client_socket.send(command.encode())
+    enc_command = encryption.encrypt(command)
+    client_socket.send(enc_command)
     print(command)
 
 
@@ -57,11 +60,14 @@ def execute_command(client_socket, cmd, msg_list):
         msg_list.delete(0, tk.END)
     else:
         command = f"execute {cmd}"
-        client_socket.send(command.encode())
+        enc_command = encryption.encrypt(command)
+        client_socket.send(enc_command)
 
 
 def request_file(file_location, client_socket):
-    client_socket.send(f"file {file_location}".encode())
+    request = f"file {file_location}"
+    enc_request = encryption.encrypt(request)
+    client_socket.send(enc_request)
 
 
 def browse_files(win, client_socket):
@@ -223,7 +229,9 @@ def main():
     receive_thread.start()
     root.mainloop()
 
-    client_socket.send("exit 0".encode())
+    exit_command = "exit 0"
+    enc_exit_command = encryption.encrypt(exit_command)
+    client_socket.send(enc_exit_command)
     is_alive = False
     server_socket.close()
     client_socket.close()

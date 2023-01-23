@@ -1,7 +1,6 @@
 import os.path
 import tkinter as tk
 from tkinter import ttk
-from ttkthemes import ThemedStyle
 import socket
 from threading import *
 
@@ -82,8 +81,6 @@ def browse_files(win, client_socket):
 
 def main():
     root = tk.Tk()
-    # style = ThemedStyle(root)
-    # style.set_theme("adapta")
     root.tk.call("source", "azure.tcl")
     root.tk.call("set_theme", "dark")
     root.title("Remote Control")
@@ -182,7 +179,7 @@ def main():
             messages_frame = ttk.Frame(tabs[tab])
             scrollbar = ttk.Scrollbar(messages_frame)
             msg_list = tk.Listbox(messages_frame, yscrollcommand=scrollbar.set, width=100, height=25)
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=10)
             msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
             msg_list.pack()
             messages_frame.pack()

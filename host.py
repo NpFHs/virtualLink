@@ -40,7 +40,8 @@ def log_out(client_socket):
 def get_resp(client_socket):
     msg_len = client_socket.recv(8)
     if msg_len.isdigit():
-        resp = client_socket.recv(int(msg_len)).decode()  # TODO: add more than 1024 bit support.
+        enc_resp = client_socket.recv(int(msg_len))  # TODO: add more than 1024 bit support.
+        resp = encryption.decrypt(enc_resp).decode()
     else:
         print("No length info!")
         client_socket.recv(16777216)  # TODO: find better way to clean garbage?
@@ -133,7 +134,8 @@ def main():
                             while True:
                                 msg_len = client_socket.recv(8)
                                 if msg_len.isdigit():
-                                    bytes_file = client_socket.recv(int(msg_len))
+                                    enc_bytes_file = client_socket.recv(int(msg_len))
+                                    bytes_file = encryption.decrypt(enc_bytes_file)
                                 else:
                                     print("No length info!")
                                     client_socket.recv(16777216)

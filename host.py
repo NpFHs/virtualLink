@@ -133,7 +133,8 @@ def main():
                         with open(file_name, "wb") as file:
                             while True:
                                 msg_len = client_socket.recv(8)
-                                if msg_len.isdigit():
+                                if msg_len.isdigit() and len(msg_len) == 8:
+                                    print(msg_len)
                                     enc_bytes_file = client_socket.recv(int(msg_len))
                                     bytes_file = encryption.decrypt(enc_bytes_file)
                                 else:
@@ -141,6 +142,7 @@ def main():
                                     client_socket.recv(16777216)
                                     bytes_file = "Error".encode()
 
+                                print(f"bytes_file: {bytes_file}")
                                 if bytes_file == "file done".encode():  # TODO: find better way to stop the loop
                                     break
                                 file.write(bytes_file)

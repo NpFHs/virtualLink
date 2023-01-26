@@ -1,7 +1,6 @@
 import os.path
 import tkinter as tk
 from tkinter import ttk
-from ttkthemes import ThemedStyle
 import socket
 from threading import *
 
@@ -82,14 +81,15 @@ def browse_files(win, client_socket):
 
 def main():
     root = tk.Tk()
-    style = ThemedStyle(root)
-    style.set_theme("adapta")
+    root.tk.call("source", "azure.tcl")
+    root.tk.call("set_theme", "dark")
     root.title("Remote Control")
-    root.geometry("800x600")
+    root.geometry("800x610")
     tab_frame = ttk.Notebook()
-    tab_frame.pack(side="top", fill="both", expand=True)
+    tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
     client_dist = tk.StringVar(value="Unknown")
     client_name = tk.StringVar(value="Unknown")
+    command = tk.StringVar(value="Enter a command")
     files = tk.StringVar()
 
     is_alive = True
@@ -183,15 +183,15 @@ def main():
         elif tab == "Command Prompt":
             messages_frame = ttk.Frame(tabs[tab])
             scrollbar = ttk.Scrollbar(messages_frame)
-            msg_list = tk.Listbox(messages_frame, height=24, width=100, yscrollcommand=scrollbar.set)
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-            msg_list.pack(side=tk.LEFT, fill=tk.BOTH)
+            msg_list = tk.Listbox(messages_frame, yscrollcommand=scrollbar.set, width=100, height=25)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=10)
+            msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
             msg_list.pack()
             messages_frame.pack()
 
-            label = ttk.Label(tabs[tab], text="Enter a command:")
-            label.pack(side="top", fill="x", padx=10, pady=10)
-            command_entry = ttk.Entry(tabs[tab])
+            # label = ttk.Label(tabs[tab], text="Enter a command:")
+            # label.pack(side="top", fill="x", padx=10, pady=10)
+            command_entry = ttk.Entry(tabs[tab], textvariable=command)
             command_entry.bind("<Return>", lambda event: [execute_command(client_socket, command_entry.get(), msg_list),
                                                           command_entry.delete(0, tk.END)])
             command_entry.pack(side="top", fill="x", padx=10)

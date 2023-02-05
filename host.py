@@ -5,11 +5,12 @@ from ttkthemes import ThemedStyle
 import socket
 from threading import *
 import encryption
+import time
 
 IP: str = "0.0.0.0"
-PORT: int = 8091
-
-
+PORT: int = 8090
+FILE_KEY = "password12345678"
+BREAK = "<BREAK>"
 # client_dist = "Unknown"
 
 
@@ -66,7 +67,7 @@ def execute_command(client_socket, cmd, msg_list):
 
 
 def request_file(file_location, client_socket):
-    request = f"file {file_location}"
+    request = f"file {FILE_KEY} {file_location}"
     enc_request = encryption.encrypt(request)
     client_socket.send(enc_request)
 
@@ -133,17 +134,20 @@ def main():
                         with open(file_name, "wb") as file:
                             while True:
                                 msg_len = client_socket.recv(8)
+                                print(msg_len)
                                 if msg_len.isdigit() and len(msg_len) == 8:
-                                    print(msg_len)
-                                    enc_bytes_file = client_socket.recv(int(msg_len))
-                                    bytes_file = encryption.decrypt(enc_bytes_file)
+                                    enc_response = client_socket.recv(int(msg_len))
+                                    enc_iv = enc_response.split(BREAK.encode())[0]
+                                    iv = encryption.decrypt(enc_iv)
+                                    enc_bytes_file = enc_response.split(BREAK.encode())[1]
+                                    bytes_file = encryption.file_decrypt(enc_bytes_file, FILE_KEY.encode(), iv)
                                 else:
                                     print("No length info!")
                                     client_socket.recv(16777216)
                                     bytes_file = "Error".encode()
 
                                 print(f"bytes_file: {bytes_file}")
-                                if bytes_file == "file done".encode():  # TODO: find better way to stop the loop
+                                if bytes_file == "file done 0".encode():  # TODO: find better way to stop the loop
                                     break
                                 file.write(bytes_file)
                             files.set(f"{files.get()}\n{file_name}".strip("\n"))

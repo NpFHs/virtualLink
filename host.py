@@ -7,7 +7,7 @@ from threading import *
 import encryption
 
 IP: str = "0.0.0.0"
-PORT: int = 8091
+PORT: int = 8090
 
 
 # client_dist = "Unknown"

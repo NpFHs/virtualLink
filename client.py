@@ -2,12 +2,13 @@ import socket
 import os
 import platform
 import encryption
+import time
 
 BUFFER_SIZE = 1024
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
-PORT = 8091
-IP = "127.0.0.1"  # TODO: give IP and PORT parameters out of the code
+PORT = 22007
+IP = "193.161.193.99"  # TODO: give IP and PORT parameters out of the code
 power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
                                "Linux": "shutdown now"},
                   "restart": {"Windows": "shutdown /r",
@@ -25,6 +26,7 @@ def send_response(client_socket, msg_type, msg):
         resp_len = str(len(enc_response)).zfill(8)
         enc_resp = resp_len.encode() + enc_response
         client_socket.sendall(enc_resp)
+        time.sleep(0.1)
 
     else:
         if msg_type == "sys_info":
@@ -36,7 +38,7 @@ def send_response(client_socket, msg_type, msg):
         enc_response = encryption.encrypt(response)
         resp_len = str(len(enc_response)).zfill(8)
         enc_resp = resp_len.encode() + enc_response
-        client_socket.send(enc_resp)
+        client_socket.sendall(enc_resp)
 
 
 def handle_server_response(command, client_socket):
@@ -83,6 +85,7 @@ def handle_server_response(command, client_socket):
                     if len(bytes_read) == 0:
                         break
                     send_response(client_socket, "filepart", bytes_read)
+
             print("done")
             return "file", "done"
         except FileNotFoundError:

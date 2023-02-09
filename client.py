@@ -89,6 +89,9 @@ def handle_server_response(command, client_socket):
         except FileNotFoundError:
             print("file not found")
             return "file", "FileNotFound"
+        except PermissionError:
+            print("PermissionError")
+            return "file", "PermissionError"
 
     elif cmd_type == "files_list":
         files_location = cmd

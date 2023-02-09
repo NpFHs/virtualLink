@@ -1,4 +1,5 @@
 import os.path
+import time
 import tkinter as tk
 from tkinter import ttk
 import socket
@@ -6,6 +7,13 @@ from threading import *
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
+BREAK = "<BREAK>"
+
+pre_commands = []  # Storing the last commands the user enter.
+current_command = 0  # Use to save the command location when the user press Up button.
+browser_current_directory = "/"
+
+files_list = []
 
 
 # client_dist = "Unknown"
@@ -62,12 +70,60 @@ def request_file(file_location, client_socket):
     client_socket.send(f"file {file_location}".encode())
 
 
+def request_files_in_location(location, client_socket):
+    client_socket.send(f"files_list {location}".encode())
+
+
+def open_folder(folder_name, browser, client_socket, file_location):
+    global browser_current_directory
+
+    file_type = folder_name.split()[0]
+    file_name = " ".join(folder_name.split()[1:])
+    if file_type == "DIR":
+        browser_current_directory = f"{browser_current_directory}{file_name}/"
+        request_files_in_location(browser_current_directory, client_socket)
+        time.sleep(0.5)  # wait until the files list update
+        browser.delete(0, tk.END)
+        for file in files_list:
+            browser.insert(tk.END, file)
+    elif file_type == "FILE":
+        file_location.set(browser_current_directory + file_name)
+    else:
+        print("This is not a directory!")
+
+
+def browser_go_back(browser, client_socket):
+    global browser_current_directory
+
+    if browser_current_directory.count("/") > 1:
+        browser_current_directory = "/".join(browser_current_directory.split("/")[:-2]) + "/"
+        request_files_in_location(browser_current_directory, client_socket)
+        time.sleep(0.5)  # wait until the files list update
+        browser.delete(0, tk.END)
+        for file in files_list:
+            browser.insert(tk.END, file)
+
+
 def browse_files(win, client_socket):
     file_location = tk.StringVar()
     top = tk.Toplevel(win)
+    top.title("File browser")
     top.geometry("300x400")
-    t = ttk.Label(top, text="Browser:")
-    t.pack(side="top", padx=10, pady=10)
+
+    file_browser = tk.Listbox(top, width=35, height=13)
+    file_browser.bind("<Double-Button-1>",
+                      lambda event: open_folder(file_browser.get(tk.ACTIVE), file_browser, client_socket,
+                                                file_location))
+    back_button = ttk.Button(top, text="Back", command=lambda: browser_go_back(file_browser, client_socket))
+    back_button.pack(side="top", anchor="nw", padx=10, pady=(10, 0))
+    file_browser.bind("<Return>", lambda event: open_folder(file_browser.get(tk.ACTIVE), file_browser, client_socket,
+                                                            file_location))
+    file_browser.pack(side=tk.TOP, padx=10, pady=10)
+    request_files_in_location(browser_current_directory, client_socket)
+    time.sleep(0.5)  # wait until the files list update
+    file_browser.delete(0, tk.END)
+    for file in files_list:
+        file_browser.insert(tk.END, file)
     get_file = ttk.Button(top, text="Get file",
                           command=lambda: [request_file(file_location.get(), client_socket),
                                            location_entry.delete(0, tk.END)])
@@ -119,7 +175,8 @@ def main():
                     if msg.split()[0] == "FileNotFound":
                         print("file not found!")
                     else:
-                        file_name, file_size = msg.split()
+                        file_name, file_size = msg.split(BREAK)
+
                         file_name = os.path.basename(file_name)
                         # file_size = int(file_size)
                         with open(file_name, "wb") as file:
@@ -136,14 +193,44 @@ def main():
                                     break
                                 file.write(bytes_file)
                             files.set(f"{files.get()}\n{file_name}".strip("\n"))
-
+                elif msg_type == "files_list":
+                    files_in_directory = msg.split(BREAK)
+                    files_in_directory.sort()
+                    files_list.clear()
+                    files_list.extend(files_in_directory)
+                    print(files_list)
                 else:
-
-                    print(f"Wrong message type! ({msg_type})")
+                    print(f"Wrong message type! (message: {msg_type})")
             except RuntimeError:
                 break
             except OSError:
                 break
+
+    def command_up():
+        global current_command
+        if current_command > -len(pre_commands):
+            current_command -= 1
+            command.set(pre_commands[current_command])
+        else:
+            print("Can't go up anymore!")
+
+        print(f"current_command: {current_command}, -len(pre_commands): {-len(pre_commands)}")
+
+    def command_down():
+        global current_command
+        if -1 > current_command:
+            current_command += 1
+            command.set(pre_commands[current_command])
+        else:
+            print("Can't go down anymore!")
+        print(f"current_command: {current_command}")
+
+    def send_button():
+        global current_command
+        execute_command(client_socket, command_entry.get(), msg_list),
+        pre_commands.append(command.get()),
+        command_entry.delete(0, tk.END)
+        current_command = 0
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((IP, PORT))
@@ -172,9 +259,9 @@ def main():
             files_label = ttk.Label(tabs[tab], textvariable=files)
             files_label.pack(side="bottom", padx=10, pady=10, anchor="e")
 
-        # TODO: support CLEAR command
+        # TODO: support CLEAR command - DONE
         # TODO: autofill with TAB
-        # TODO: scroll to the previous commands with Up arrow
+        # TODO: scroll to the previous commands with Up arrow - DONE
         # TODO: export output to file option
         # TODO: support "long live" commands
         # TODO: return errors
@@ -183,21 +270,21 @@ def main():
         elif tab == "Command Prompt":
             messages_frame = ttk.Frame(tabs[tab])
             scrollbar = ttk.Scrollbar(messages_frame)
-            msg_list = tk.Listbox(messages_frame, yscrollcommand=scrollbar.set, width=100, height=25)
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=10)
+            msg_list = tk.Listbox(messages_frame, yscrollcommand=scrollbar.set, width=100, height=25,
+                                  selectbackground="#333333", highlightthickness=0, activestyle="none")
+            scrollbar["command"] = msg_list.yview
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=15)
             msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
-            msg_list.pack()
             messages_frame.pack()
 
             # label = ttk.Label(tabs[tab], text="Enter a command:")
             # label.pack(side="top", fill="x", padx=10, pady=10)
             command_entry = ttk.Entry(tabs[tab], textvariable=command)
-            command_entry.bind("<Return>", lambda event: [execute_command(client_socket, command_entry.get(), msg_list),
-                                                          command_entry.delete(0, tk.END)])
+            command_entry.bind("<Up>", lambda event: command_up())
+            command_entry.bind("<Down>", lambda event: command_down())
+            command_entry.bind("<Return>", lambda event: send_button())
             command_entry.pack(side="top", fill="x", padx=10)
-            execute_button = ttk.Button(tabs[tab], text="Execute",
-                                        command=lambda: [execute_command(client_socket, command_entry.get(), msg_list),
-                                                         command_entry.delete(0, tk.END)])
+            execute_button = ttk.Button(tabs[tab], text="Execute", command=lambda: send_button())
             execute_button.pack(side="top", fill="x", padx=10, pady=10)
 
         # Add elements to the "Power Management" tab

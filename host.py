@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 import socket
 from threading import *
+from tkinter import font
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -129,7 +130,6 @@ def browse_files(win, client_socket):
     file_browser.delete(*file_browser.get_children())
 
     for file in files_list:
-        # tuple_file = tuple(file.split())  # unnecessary?
         file_browser.insert("", tk.END, values=file)
     get_file = ttk.Button(top, text="Get file",
                           command=lambda: [request_file(file_location.get(), client_socket),
@@ -154,6 +154,7 @@ def main():
     client_name = tk.StringVar(value="Unknown")
     command = tk.StringVar(value="Enter a command")
     files = tk.StringVar()
+    mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
 
     is_alive = True
 
@@ -278,7 +279,8 @@ def main():
             messages_frame = ttk.Frame(tabs[tab])
             scrollbar = ttk.Scrollbar(messages_frame)
             msg_list = tk.Listbox(messages_frame, yscrollcommand=scrollbar.set, width=100, height=25,
-                                  selectbackground="#333333", highlightthickness=0, activestyle="none")
+                                  selectbackground="#333333", highlightthickness=0, activestyle="none",
+                                  font=mono_font)
             scrollbar["command"] = msg_list.yview
             scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=15)
             msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)

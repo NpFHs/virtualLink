@@ -74,18 +74,21 @@ def request_files_in_location(location, client_socket):
     client_socket.send(f"files_list {location}".encode())
 
 
-def open_folder(folder_name, browser, client_socket, file_location):
+def open_folder(browser, client_socket, file_location):
     global browser_current_directory
 
-    file_type = folder_name.split()[0]
-    file_name = " ".join(folder_name.split()[1:])
+    file_iid = browser.selection()[0]
+    file_values = browser.item(file_iid)["values"]
+    file_type = file_values[0]
+    file_name = file_values[1]
+    print(f"file_name: {file_name}, file_type: {file_type}")
     if file_type == "DIR":
         browser_current_directory = f"{browser_current_directory}{file_name}/"
         request_files_in_location(browser_current_directory, client_socket)
         time.sleep(0.5)  # wait until the files list update
-        browser.delete(0, tk.END)
+        browser.delete(*browser.get_children())  # clear the browser
         for file in files_list:
-            browser.insert(tk.END, file)
+            browser.insert("", tk.END, values=file)
     elif file_type == "FILE":
         file_location.set(browser_current_directory + file_name)
     else:
@@ -96,34 +99,38 @@ def browser_go_back(browser, client_socket):
     global browser_current_directory
 
     if browser_current_directory.count("/") > 1:
-        browser_current_directory = "/".join(browser_current_directory.split("/")[:-2]) + "/"
+        browser_current_directory = "/".join(browser_current_directory.split("/")[:-2]) + "/"  # update cwd
         request_files_in_location(browser_current_directory, client_socket)
         time.sleep(0.5)  # wait until the files list update
-        browser.delete(0, tk.END)
+        browser.delete(*browser.get_children())
         for file in files_list:
-            browser.insert(tk.END, file)
+            browser.insert("", tk.END, values=file)
 
 
 def browse_files(win, client_socket):
     file_location = tk.StringVar()
     top = tk.Toplevel(win)
     top.title("File browser")
-    top.geometry("300x400")
+    top.geometry("800x500")
 
-    file_browser = tk.Listbox(top, width=35, height=13)
-    file_browser.bind("<Double-Button-1>",
-                      lambda event: open_folder(file_browser.get(tk.ACTIVE), file_browser, client_socket,
-                                                file_location))
+    columns = ("type", "name", "size")
+    file_browser = ttk.Treeview(top, columns=columns)  # create the files browser
+    file_browser["show"] = "headings"  # to avoid empty column in the beginning
+    file_browser.heading("type", text="type")
+    file_browser.heading("name", text="name")
+    file_browser.heading("size", text="size")
+    file_browser.bind("<Double-Button-1>", lambda event: open_folder(file_browser, client_socket, file_location))
+    file_browser.bind("<Return>", lambda event: open_folder(file_browser, client_socket, file_location))
     back_button = ttk.Button(top, text="Back", command=lambda: browser_go_back(file_browser, client_socket))
     back_button.pack(side="top", anchor="nw", padx=10, pady=(10, 0))
-    file_browser.bind("<Return>", lambda event: open_folder(file_browser.get(tk.ACTIVE), file_browser, client_socket,
-                                                            file_location))
     file_browser.pack(side=tk.TOP, padx=10, pady=10)
     request_files_in_location(browser_current_directory, client_socket)
     time.sleep(0.5)  # wait until the files list update
-    file_browser.delete(0, tk.END)
+    file_browser.delete(*file_browser.get_children())
+
     for file in files_list:
-        file_browser.insert(tk.END, file)
+        # tuple_file = tuple(file.split())  # unnecessary?
+        file_browser.insert("", tk.END, values=file)
     get_file = ttk.Button(top, text="Get file",
                           command=lambda: [request_file(file_location.get(), client_socket),
                                            location_entry.delete(0, tk.END)])

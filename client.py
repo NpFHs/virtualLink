@@ -2,13 +2,13 @@ import socket
 import os
 import platform
 
-
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
 PORT = 8091
 IP = "127.0.0.1"  # TODO: give IP and PORT parameters out of the code
-BREAK = "<BREAK>"
+BREAK1 = "<BREAK1>"  # use to split between LEVEL1 data
+BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
 power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
                                "Linux": "shutdown now"},
                   "restart": {"Windows": "shutdown /r",
@@ -39,6 +39,30 @@ def send_response(client_socket, msg_type, msg):
         resp_len = str(len(response.encode())).zfill(8)
         resp = resp_len + response
         client_socket.send(resp.encode())
+
+
+def convert_file_size(size):
+    unit = "bytes"
+    if size // 1000 == 0:
+        return f"{size} {unit}"
+    elif size // 1000000 == 0:
+        unit = "kB"
+        converted_size = round(size / 1000, 2)
+        return f"{converted_size} {unit}"
+    elif size // 1000000000 == 0:
+        unit = "MB"
+        converted_size = round(size / 1000000, 2)
+        return f"{converted_size} {unit}"
+    elif size // 1000000000000 == 0:
+        unit = "GB"
+        converted_size = round(size / 1000000000, 2)
+        return f"{converted_size} {unit}"
+    else:
+        print(f"size: {size}")
+        print(size // 1000000000000)
+        unit = "TB"
+        converted_size = round(size / 1000000000000, 2)
+        return f"{converted_size} {unit}"
 
 
 def handle_server_response(command, client_socket):
@@ -76,7 +100,7 @@ def handle_server_response(command, client_socket):
         file_name = cmd
         try:
             file_size = os.path.getsize(file_name)
-            send_response(client_socket, "file", f"{file_name}{BREAK}{file_size}")
+            send_response(client_socket, "file", f"{file_name}{BREAK1}{file_size}")
 
             with open(file_name, "rb") as file:
                 while True:
@@ -89,25 +113,40 @@ def handle_server_response(command, client_socket):
         except FileNotFoundError:
             print("file not found")
             return "file", "FileNotFound"
-        except PermissionError:
+        except PermissionError:  # program stop receiving when get permission error
             print("PermissionError")
             return "file", "PermissionError"
 
     elif cmd_type == "files_list":
         files_location = cmd
-        files_list = os.listdir(files_location)
-        print(f"files_list: {files_list}")
-        counter = 0
-        for file in files_list:
-            if os.path.isdir(f"{files_location}{file}"):
-                files_list[counter] = f"DIR {files_list[counter]}"
-            else:
-                files_list[counter] = f"FILE {files_list[counter]}"
-            counter += 1
+        print(f"file_location: {files_location}")
+        try:
+            files_list = os.listdir(files_location)
+            print(f"files_list: {files_list}")
+            counter = 0
+            for file in files_list:
+                file_path = f"{files_location}{file}"
+                if os.path.isdir(file_path):
+                    files_list[counter] = f"DIR{BREAK2}{files_list[counter]}"
+                    try:
+                        sum_files = len(os.listdir(file_path))  # count the number of the files in the directory
+                        files_list[counter] = files_list[counter] + BREAK2 + str(sum_files) + " Items"
+                    except PermissionError:
+                        print("can't view this file")
+                        files_list[counter] = files_list[counter] + BREAK2 + "---"
 
-        files = BREAK.join(files_list)
-        print(f"files: {files}")
-        return "files_list", files
+                else:
+                    # add size parameter to the file to be shown in the browser
+                    file_size = os.path.getsize(f"{files_location}{file}")
+                    files_list[counter] = f"FILE{BREAK2}{files_list[counter]}{BREAK2}{convert_file_size(file_size)}"
+
+                counter += 1
+
+            files = BREAK1.join(files_list)
+            print(f"files: {files}")
+            return "files_list", files
+        except FileNotFoundError:
+            pass
     return "exit", 0
 
 

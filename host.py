@@ -8,7 +8,8 @@ from tkinter import font
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
-BREAK = "<BREAK>"
+BREAK1 = "<BREAK1>"  # use to split between LEVEL1 data
+BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
 
 pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
@@ -73,27 +74,33 @@ def request_file(file_location, client_socket):
 
 def request_files_in_location(location, client_socket):
     client_socket.send(f"files_list {location}".encode())
+    print(f"location: {location}")
 
 
 def open_folder(browser, client_socket, file_location):
     global browser_current_directory
 
-    file_iid = browser.selection()[0]
-    file_values = browser.item(file_iid)["values"]
-    file_type = file_values[0]
-    file_name = file_values[1]
-    print(f"file_name: {file_name}, file_type: {file_type}")
-    if file_type == "DIR":
-        browser_current_directory = f"{browser_current_directory}{file_name}/"
-        request_files_in_location(browser_current_directory, client_socket)
-        time.sleep(0.5)  # wait until the files list update
-        browser.delete(*browser.get_children())  # clear the browser
-        for file in files_list:
-            browser.insert("", tk.END, values=file)
-    elif file_type == "FILE":
-        file_location.set(browser_current_directory + file_name)
-    else:
-        print("This is not a directory!")
+    try:
+        file_iid = browser.selection()[0]  # get the iid of the selected file
+        file_values = browser.item(file_iid)["values"]
+        file_type = file_values[0]
+        file_name = file_values[1]
+        print(f"file_name: {file_name}, file_type: {file_type}")
+        if file_type == "DIR":
+            browser_current_directory = f"{browser_current_directory}{file_name}/"
+            print(f"browser_current_directory: {browser_current_directory}")
+            request_files_in_location(browser_current_directory, client_socket)
+            time.sleep(0.5)  # wait until the files list update
+            browser.delete(*browser.get_children())  # clear the browser
+            for file in files_list:
+                tuple_file = file.split(BREAK2)  # split the file string to the browser columns
+                browser.insert("", tk.END, values=tuple_file)
+        elif file_type == "FILE":
+            file_location.set(browser_current_directory + file_name)
+        else:
+            print("This is not a directory!")
+    except IndexError:
+        print("IndexError")
 
 
 def browser_go_back(browser, client_socket):
@@ -105,7 +112,8 @@ def browser_go_back(browser, client_socket):
         time.sleep(0.5)  # wait until the files list update
         browser.delete(*browser.get_children())
         for file in files_list:
-            browser.insert("", tk.END, values=file)
+            tuple_file = file.split(BREAK2)  # split the file string to the browser columns
+            browser.insert("", tk.END, values=tuple_file)
 
 
 def browse_files(win, client_socket):
@@ -130,7 +138,8 @@ def browse_files(win, client_socket):
     file_browser.delete(*file_browser.get_children())
 
     for file in files_list:
-        file_browser.insert("", tk.END, values=file)
+        tuple_file = file.split(BREAK2)  # split the file string to the browser columns
+        file_browser.insert("", tk.END, values=tuple_file)
     get_file = ttk.Button(top, text="Get file",
                           command=lambda: [request_file(file_location.get(), client_socket),
                                            location_entry.delete(0, tk.END)])
@@ -183,7 +192,7 @@ def main():
                     if msg.split()[0] == "FileNotFound":
                         print("file not found!")
                     else:
-                        file_name, file_size = msg.split(BREAK)
+                        file_name, file_size = msg.split(BREAK1)
 
                         file_name = os.path.basename(file_name)
                         # file_size = int(file_size)
@@ -202,7 +211,7 @@ def main():
                                 file.write(bytes_file)
                             files.set(f"{files.get()}\n{file_name}".strip("\n"))
                 elif msg_type == "files_list":
-                    files_in_directory = msg.split(BREAK)
+                    files_in_directory = msg.split(BREAK1)
                     files_in_directory.sort()
                     files_list.clear()
                     files_list.extend(files_in_directory)

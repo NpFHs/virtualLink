@@ -161,6 +161,7 @@ def main():
     tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
     client_dist = tk.StringVar(value="Unknown")
     client_name = tk.StringVar(value="Unknown")
+    client_name_with_name = tk.StringVar(value="Unknown")
     command = tk.StringVar(value="Enter a command")
     files = tk.StringVar()
     mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
@@ -177,8 +178,9 @@ def main():
                     if msg.split()[0] == "os":
                         client_dist.set("OS: " + " ".join(msg.split(" ")[1:]))
                     elif msg.split()[0] == "name":
-                        client_name.set("Name: " + " ".join(msg.split(" ")[1:]))
-
+                        name = " ".join(msg.split(" ")[1:])
+                        client_name_with_name.set("Name: " + name)
+                        client_name.set(name)
                 elif msg_type == "execute":
                     path = msg.split()[0]
                     output = " ".join(msg.split(" ")[1:]).splitlines()
@@ -318,7 +320,7 @@ def main():
             ip_label.pack(side="bottom", padx=10, pady=5)
             dist_label = ttk.Label(tabs[tab], textvariable=client_dist)
             dist_label.pack(side="bottom", padx=10, pady=5)
-            name_label = ttk.Label(tabs[tab], textvariable=client_name)
+            name_label = ttk.Label(tabs[tab], textvariable=client_name_with_name)
             name_label.pack(side="bottom", padx=10, pady=5)
             panel_label = ttk.Label(tabs[tab], text="system information:")
             panel_label.pack(side="bottom", padx=10, pady=10)

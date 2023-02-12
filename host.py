@@ -87,14 +87,19 @@ def open_folder(browser, client_socket, file_location):
         file_name = file_values[1]
         print(f"file_name: {file_name}, file_type: {file_type}")
         if file_type == "DIR":
+            browser_previous_directory = browser_current_directory
             browser_current_directory = f"{browser_current_directory}{file_name}/"
             print(f"browser_current_directory: {browser_current_directory}")
+            print(f"browser_previous_directory: {browser_previous_directory}")
             request_files_in_location(browser_current_directory, client_socket)
             time.sleep(0.5)  # wait until the files list update
-            browser.delete(*browser.get_children())  # clear the browser
-            for file in files_list:
-                tuple_file = file.split(BREAK2)  # split the file string to the browser columns
-                browser.insert("", tk.END, values=tuple_file)
+            if "".join(files_list) == "PermissionError":
+                browser_current_directory = browser_previous_directory
+            else:
+                browser.delete(*browser.get_children())  # clear the browser
+                for file in files_list:
+                    tuple_file = file.split(BREAK2)  # split the file string to the browser columns
+                    browser.insert("", tk.END, values=tuple_file)
         elif file_type == "FILE":
             file_location.set(browser_current_directory + file_name)
         else:
@@ -120,26 +125,9 @@ def browse_files(win, client_socket):
     file_location = tk.StringVar()
     top = tk.Toplevel(win)
     top.title("File browser")
-    top.geometry("800x500")
-
-    columns = ("type", "name", "size")
-    file_browser = ttk.Treeview(top, columns=columns)  # create the files browser
-    file_browser["show"] = "headings"  # to avoid empty column in the beginning
-    file_browser.heading("type", text="type")
-    file_browser.heading("name", text="name")
-    file_browser.heading("size", text="size")
-    file_browser.bind("<Double-Button-1>", lambda event: open_folder(file_browser, client_socket, file_location))
-    file_browser.bind("<Return>", lambda event: open_folder(file_browser, client_socket, file_location))
-    back_button = ttk.Button(top, text="Back", command=lambda: browser_go_back(file_browser, client_socket))
-    back_button.pack(side="top", anchor="nw", padx=10, pady=(10, 0))
-    file_browser.pack(side=tk.TOP, padx=10, pady=10)
-    request_files_in_location(browser_current_directory, client_socket)
-    time.sleep(0.5)  # wait until the files list update
-    file_browser.delete(*file_browser.get_children())
-
-    for file in files_list:
-        tuple_file = file.split(BREAK2)  # split the file string to the browser columns
-        file_browser.insert("", tk.END, values=tuple_file)
+    top.geometry("350x500")
+    current_path = tk.StringVar(value="/...")
+    # the button and the entry before the browser, so when the user change the window size they will always be visible.
     get_file = ttk.Button(top, text="Get file",
                           command=lambda: [request_file(file_location.get(), client_socket),
                                            location_entry.delete(0, tk.END)])
@@ -149,6 +137,35 @@ def browse_files(win, client_socket):
     location_entry.bind("<Return>", lambda event: [request_file(file_location.get(), client_socket),
                                                    location_entry.delete(0, tk.END)])
     location_entry.pack(side="bottom", fill="x", padx=10, pady=5)
+
+    columns = ("type", "name", "size")
+    file_browser = ttk.Treeview(top, columns=columns)  # create the files browser
+    file_browser["show"] = "headings"  # to avoid empty column in the beginning
+    file_browser.heading("type", text="type")
+    file_browser.column("type", width=40)
+    file_browser.heading("name", text="name")
+    file_browser.column("name", width=160)
+    file_browser.heading("size", text="size")
+    file_browser.column("size", width=80)
+    file_browser.bind("<Double-Button-1>", lambda event: open_folder(file_browser, client_socket, file_location))
+    file_browser.bind("<Return>", lambda event: open_folder(file_browser, client_socket, file_location))
+
+    file_browser.pack(side="bottom", padx=10, pady=10, fill="both", expand=True)
+
+    path_combobox = ttk.Combobox(top, textvariable=current_path)
+    path_combobox.pack(side="right", anchor="ne", fill="x", expand=True, padx=10, pady=(10, 0))
+    separator = ttk.Separator(top, orient="vertical")
+    separator.pack(side="right", fill="y", pady=(14, 4))
+    back_button = ttk.Button(top, text="<", width=1, command=lambda: browser_go_back(file_browser, client_socket))
+    back_button.pack(side="right", anchor="nw", padx=10, pady=(10, 0))
+
+    request_files_in_location(browser_current_directory, client_socket)
+    time.sleep(0.5)  # wait until the files list update
+    file_browser.delete(*file_browser.get_children())
+
+    for file in files_list:
+        tuple_file = file.split(BREAK2)  # split the file string to the browser columns
+        file_browser.insert("", tk.END, values=tuple_file)
 
 
 def main():
@@ -284,7 +301,7 @@ def main():
         # TODO: export output to file option
         # TODO: support "long live" commands
         # TODO: return errors
-        # TODO: scrollbar don't scrolling
+        # TODO: scrollbar don't scrolling - DONE
         # Add elements to the "Command Prompt" tab
         elif tab == "Command Prompt":
             messages_frame = ttk.Frame(tabs[tab])

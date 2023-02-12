@@ -113,6 +113,9 @@ def handle_server_response(command, client_socket):
         except FileNotFoundError:
             print("file not found")
             return "file", "FileNotFound"
+        except IsADirectoryError:
+            print("is a directory!")
+            return "file", "IsADirectory"
         except PermissionError:  # program stop receiving when get permission error
             print("PermissionError")
             return "file", "PermissionError"
@@ -147,6 +150,8 @@ def handle_server_response(command, client_socket):
             return "files_list", files
         except FileNotFoundError:
             pass
+        except PermissionError:
+            return "files_list", "PermissionError"
     return "exit", 0
 
 

@@ -15,8 +15,9 @@ pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
 browser_current_directory = "/"
 
-files_list = []
 
+files_list = []
+is_files_list_change = False  # mark when get new files list
 
 # client_dist = "Unknown"
 
@@ -74,25 +75,25 @@ def request_file(file_location, client_socket):
 
 def request_files_in_location(location, client_socket):
     client_socket.send(f"files_list {location}".encode())
-    print(f"location: {location}")
 
 
 def open_folder(browser, client_socket, file_location):
     global browser_current_directory
+    global is_files_list_change
 
     try:
         file_iid = browser.selection()[0]  # get the iid of the selected file
         file_values = browser.item(file_iid)["values"]
         file_type = file_values[0]
         file_name = file_values[1]
-        print(f"file_name: {file_name}, file_type: {file_type}")
         if file_type == "DIR":
             browser_previous_directory = browser_current_directory
             browser_current_directory = f"{browser_current_directory}{file_name}/"
-            print(f"browser_current_directory: {browser_current_directory}")
-            print(f"browser_previous_directory: {browser_previous_directory}")
             request_files_in_location(browser_current_directory, client_socket)
-            time.sleep(0.5)  # wait until the files list update
+            # time.sleep(0.5)  # wait to the files list to update
+            while not is_files_list_change:  # wait to the files list to change
+                print(f"is_files_list_change: {is_files_list_change}")
+                continue
             if "".join(files_list) == "PermissionError":
                 browser_current_directory = browser_previous_directory
             else:
@@ -100,6 +101,7 @@ def open_folder(browser, client_socket, file_location):
                 for file in files_list:
                     tuple_file = file.split(BREAK2)  # split the file string to the browser columns
                     browser.insert("", tk.END, values=tuple_file)
+            is_files_list_change = False
         elif file_type == "FILE":
             file_location.set(browser_current_directory + file_name)
         else:
@@ -186,6 +188,8 @@ def main():
     is_alive = True
 
     def receive():
+        global is_files_list_change
+
         print("Start receiving")
         while is_alive:
             try:
@@ -204,7 +208,7 @@ def main():
                     for line in output:
                         msg_list.insert(tk.END, line)
                     msg_list.insert(tk.END, "")
-                    msg_list.insert(tk.END, f"({client_name.get()}):{path}$ ")  # TODO: fix the client name
+                    msg_list.insert(tk.END, f"({client_name.get()}):{path}$ ")  # TODO: fix the client name - DONE
                     msg_list.see(tk.END)
 
                 elif msg_type == "file":
@@ -234,7 +238,8 @@ def main():
                     files_in_directory.sort()
                     files_list.clear()
                     files_list.extend(files_in_directory)
-                    print(files_list)
+                    is_files_list_change = True
+                    print(f"is_files_list_change: {is_files_list_change}")
                 else:
                     print(f"Wrong message type! (message: {msg_type})")
             except RuntimeError:
@@ -250,8 +255,6 @@ def main():
         else:
             print("Can't go up anymore!")
 
-        print(f"current_command: {current_command}, -len(pre_commands): {-len(pre_commands)}")
-
     def command_down():
         global current_command
         if -1 > current_command:
@@ -259,7 +262,6 @@ def main():
             command.set(pre_commands[current_command])
         else:
             print("Can't go down anymore!")
-        print(f"current_command: {current_command}")
 
     def send_button():
         global current_command

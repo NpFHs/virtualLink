@@ -5,8 +5,13 @@ import platform
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
-PORT = 8091
-IP = "127.0.0.1"  # TODO: give IP and PORT parameters out of the code
+try:
+    PORT = int(input("Please enter the host PORT (8091): "))
+except ValueError:
+    PORT = 8091
+IP = input("Please enter the host IP (127.0.0.1): ")  # TODO: give IP and PORT parameters out of the code
+if IP == "":
+    IP = "127.0.0.1"
 BREAK1 = "<BREAK1>"  # use to split between LEVEL1 data
 BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
 power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",

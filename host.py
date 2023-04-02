@@ -5,6 +5,7 @@ from tkinter import ttk
 import socket
 from threading import *
 from tkinter import font
+import keyboard
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -13,11 +14,17 @@ BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
 
 pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
-browser_current_directory = "/"
-
+current_directory = "/"
 
 files_list = []
+
+# indicate the current file location for tab_complete()
+current_file_in_files_list = 0
+# save the original command for tab_complete()
+pre_command = ""
+
 is_files_list_change = False  # mark when get new files list
+
 
 # client_dist = "Unknown"
 
@@ -32,6 +39,9 @@ def shutdown(client_socket):
 
 
 def restart(client_socket):
+    """
+    Sent restart command to the client.
+    """
     command = f"power restart"
     client_socket.send(command.encode())
     print(command)
@@ -49,8 +59,10 @@ def get_resp(client_socket):
         resp = client_socket.recv(int(msg_len)).decode()  # TODO: add more than 1024 bit support.
     else:
         print("No length info!")
-        client_socket.recv(16777216)  # TODO: find better way to clean garbage? No. - DONE.
-        resp = "Error"
+
+        # clean possible garbage
+        client_socket.recv(16777216)
+        resp = "Error, no length info!"
 
     try:
         msg_type = resp.split()[0]
@@ -68,17 +80,25 @@ def execute_command(client_socket, cmd, msg_list):
         command = f"execute {cmd}"
         client_socket.send(command.encode())
 
+    # keep the files list up to date
+    if cmd.split()[0] == "cd":
+        request_files_in_location(client_socket)
+
 
 def request_file(file_location, client_socket):
     client_socket.send(f"file {file_location}".encode())
 
 
-def request_files_in_location(location, client_socket):
+def request_files_in_location(client_socket, location="CURRENT"):
+    """
+    Used to get list of files in given location.
+    if not given, return list of the files in the client current directory.
+    """
     client_socket.send(f"files_list {location}".encode())
 
 
 def open_folder(browser, client_socket, file_location):
-    global browser_current_directory
+    global current_directory
     global is_files_list_change
 
     try:
@@ -87,15 +107,15 @@ def open_folder(browser, client_socket, file_location):
         file_type = file_values[0]
         file_name = file_values[1]
         if file_type == "DIR":
-            browser_previous_directory = browser_current_directory
-            browser_current_directory = f"{browser_current_directory}{file_name}/"
-            request_files_in_location(browser_current_directory, client_socket)
+            browser_previous_directory = current_directory
+            current_directory = f"{current_directory}{file_name}/"
+            request_files_in_location(current_directory, client_socket)
             # time.sleep(0.5)  # wait to the files list to update
             while not is_files_list_change:  # wait to the files list to change
                 print(f"is_files_list_change: {is_files_list_change}")
                 continue
             if "".join(files_list) == "PermissionError":
-                browser_current_directory = browser_previous_directory
+                current_directory = browser_previous_directory
             else:
                 browser.delete(*browser.get_children())  # clear the browser
                 for file in files_list:
@@ -103,7 +123,7 @@ def open_folder(browser, client_socket, file_location):
                     browser.insert("", tk.END, values=tuple_file)
             is_files_list_change = False
         elif file_type == "FILE":
-            file_location.set(browser_current_directory + file_name)
+            file_location.set(current_directory + file_name)
         else:
             print("This is not a directory!")
     except IndexError:
@@ -111,11 +131,11 @@ def open_folder(browser, client_socket, file_location):
 
 
 def browser_go_back(browser, client_socket):
-    global browser_current_directory
+    global current_directory
 
-    if browser_current_directory.count("/") > 1:
-        browser_current_directory = "/".join(browser_current_directory.split("/")[:-2]) + "/"  # update cwd
-        request_files_in_location(browser_current_directory, client_socket)
+    if current_directory.count("/") > 1:
+        current_directory = "/".join(current_directory.split("/")[:-2]) + "/"  # update cwd
+        request_files_in_location(client_socket, current_directory)
         time.sleep(0.5)  # wait until the files list update
         browser.delete(*browser.get_children())
         for file in files_list:
@@ -161,13 +181,67 @@ def browse_files(win, client_socket):
     back_button = ttk.Button(top, text="<", width=1, command=lambda: browser_go_back(file_browser, client_socket))
     back_button.pack(side="right", anchor="nw", padx=10, pady=(10, 0))
 
-    request_files_in_location(browser_current_directory, client_socket)
-    time.sleep(0.5)  # wait until the files list update
+    request_files_in_location(client_socket, current_directory)
+    time.sleep(0.5)  # wait until the files list update TODO: it's ABSOLUTELY WRONG way to do it
     file_browser.delete(*file_browser.get_children())
 
     for file in files_list:
         tuple_file = file.split(BREAK2)  # split the file string to the browser columns
         file_browser.insert("", tk.END, values=tuple_file)
+
+
+def receive_sys_info(msg, client_dist, client_name_with_name, client_name):
+    if msg.split()[0] == "os":
+        client_dist.set("OS: " + " ".join(msg.split(" ")[1:]))
+    elif msg.split()[0] == "name":
+        name = " ".join(msg.split(" ")[1:])
+        client_name_with_name.set("Name: " + name)
+        client_name.set(name)
+
+
+def receive_execute(msg, msg_list, client_name):
+    path = msg.split()[0]
+    output = " ".join(msg.split(" ")[1:]).splitlines()
+    for line in output:
+        msg_list.insert(tk.END, line)
+    msg_list.insert(tk.END, "")
+    msg_list.insert(tk.END, f"({client_name.get()}):{path}$ ")
+    msg_list.see(tk.END)
+
+
+def receive_file(msg, client_socket, files):
+    if msg.split()[0] == "FileNotFound":
+        print("file not found!")
+    else:
+        file_name, file_size = msg.split(BREAK1)
+
+        file_name = os.path.basename(file_name)
+        # file_size = int(file_size)
+        with open(file_name, "wb") as file:
+            while True:
+                msg_len = client_socket.recv(8)
+                if msg_len.isdigit():
+                    bytes_file = client_socket.recv(int(msg_len))
+                else:
+                    print("No length info!")
+                    # clean possible garbage
+                    client_socket.recv(16777216)
+                    bytes_file = "Error".encode()
+
+                if bytes_file == "file done".encode():
+                    break
+                file.write(bytes_file)
+            files.set(f"{files.get()}\n{file_name}".strip("\n"))
+
+
+def receive_files_list(msg):
+    global is_files_list_change
+    files_in_directory = msg.split(BREAK1)
+    files_in_directory.sort()
+    files_list.clear()
+    files_list.extend(files_in_directory)
+    is_files_list_change = True
+    print(f"is_files_list_change: {is_files_list_change}")
 
 
 def main():
@@ -188,58 +262,23 @@ def main():
     is_alive = True
 
     def receive():
-        global is_files_list_change
-
         print("Start receiving")
         while is_alive:
             try:
                 msg_type, msg = get_resp(client_socket)
 
                 if msg_type == "sys_info":
-                    if msg.split()[0] == "os":
-                        client_dist.set("OS: " + " ".join(msg.split(" ")[1:]))
-                    elif msg.split()[0] == "name":
-                        name = " ".join(msg.split(" ")[1:])
-                        client_name_with_name.set("Name: " + name)
-                        client_name.set(name)
+                    receive_sys_info(msg, client_dist, client_name_with_name, client_name)
+
                 elif msg_type == "execute":
-                    path = msg.split()[0]
-                    output = " ".join(msg.split(" ")[1:]).splitlines()
-                    for line in output:
-                        msg_list.insert(tk.END, line)
-                    msg_list.insert(tk.END, "")
-                    msg_list.insert(tk.END, f"({client_name.get()}):{path}$ ")  # TODO: fix the client name - DONE
-                    msg_list.see(tk.END)
+                    receive_execute(msg, msg_list, client_name)
 
                 elif msg_type == "file":
-                    if msg.split()[0] == "FileNotFound":
-                        print("file not found!")
-                    else:
-                        file_name, file_size = msg.split(BREAK1)
+                    receive_file(msg, client_socket, files)
 
-                        file_name = os.path.basename(file_name)
-                        # file_size = int(file_size)
-                        with open(file_name, "wb") as file:
-                            while True:
-                                msg_len = client_socket.recv(8)
-                                if msg_len.isdigit():
-                                    bytes_file = client_socket.recv(int(msg_len))
-                                else:
-                                    print("No length info!")
-                                    client_socket.recv(16777216)
-                                    bytes_file = "Error".encode()
-
-                                if bytes_file == "file done".encode():  # TODO: find better way to stop the loop
-                                    break
-                                file.write(bytes_file)
-                            files.set(f"{files.get()}\n{file_name}".strip("\n"))
                 elif msg_type == "files_list":
-                    files_in_directory = msg.split(BREAK1)
-                    files_in_directory.sort()
-                    files_list.clear()
-                    files_list.extend(files_in_directory)
-                    is_files_list_change = True
-                    print(f"is_files_list_change: {is_files_list_change}")
+                    receive_files_list(msg)
+
                 else:
                     print(f"Wrong message type! (message: {msg_type})")
             except RuntimeError:
@@ -263,17 +302,40 @@ def main():
         else:
             print("Can't go down anymore!")
 
+    def tab_complete(entry):
+        global current_file_in_files_list, pre_command
+
+        # save the current command only at the first time tab pressed
+        if current_file_in_files_list == 0:
+            pre_command = command.get()
+            print(f"files_list: {files_list}")
+
+        if current_file_in_files_list >= len(files_list):
+            current_file_in_files_list = 0
+
+        file_name = files_list[current_file_in_files_list].split(BREAK2)[1]
+        command.set(f"{pre_command} {file_name}")
+        current_file_in_files_list += 1
+        entry.icursor(tk.END)
+        return "break"
+
     def send_button():
-        global current_command
-        execute_command(client_socket, command_entry.get(), msg_list),
-        pre_commands.append(command.get()),
+        global current_command, current_file_in_files_list
+        execute_command(client_socket, command_entry.get(), msg_list)
+        pre_commands.append(command.get())
         command_entry.delete(0, tk.END)
         current_command = 0
+
+        # reset the current file for tab_complete()
+        current_file_in_files_list = 0
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((IP, PORT))
     server_socket.listen()
     client_socket, client_address = server_socket.accept()
+
+    # keep the files list updated
+    request_files_in_location(client_socket)
 
     tabs = {}
     for tab in ("Remote Desktop", "File Transfer", "Command Prompt", "Power Management"):
@@ -297,13 +359,10 @@ def main():
             files_label = ttk.Label(tabs[tab], textvariable=files)
             files_label.pack(side="bottom", padx=10, pady=10, anchor="e")
 
-        # TODO: support CLEAR command - DONE
         # TODO: autofill with TAB
-        # TODO: scroll to the previous commands with Up arrow - DONE
         # TODO: export output to file option
         # TODO: support "long live" commands
         # TODO: return errors
-        # TODO: scrollbar don't scrolling - DONE
         # Add elements to the "Command Prompt" tab
         elif tab == "Command Prompt":
             messages_frame = ttk.Frame(tabs[tab])
@@ -322,6 +381,7 @@ def main():
             command_entry.bind("<Up>", lambda event: command_up())
             command_entry.bind("<Down>", lambda event: command_down())
             command_entry.bind("<Return>", lambda event: send_button())
+            command_entry.bind("<Tab>", lambda event: tab_complete(command_entry))
             command_entry.pack(side="top", fill="x", padx=10)
             execute_button = ttk.Button(tabs[tab], text="Execute", command=lambda: send_button())
             execute_button.pack(side="top", fill="x", padx=10, pady=10)

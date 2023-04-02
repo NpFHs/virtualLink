@@ -5,15 +5,20 @@ import platform
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
+
 try:
     PORT = int(input("Please enter the host PORT (8091): "))
 except ValueError:
     PORT = 8091
-IP = input("Please enter the host IP (127.0.0.1): ")  # TODO: give IP and PORT parameters out of the code
-if IP == "":
+
+IP = input("Please enter the host IP (127.0.0.1): ")
+
+if IP == "" or len(IP.split(".")) != 4:
     IP = "127.0.0.1"
+
 BREAK1 = "<BREAK1>"  # use to split between LEVEL1 data
 BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
+
 power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
                                "Linux": "shutdown now"},
                   "restart": {"Windows": "shutdown /r",
@@ -74,7 +79,6 @@ def handle_server_response(command, client_socket):
     cmd_type = command.split()[0]
     cmd = " ".join(command.split()[1:])
 
-    # TODO: add windows support - DONE
     if cmd_type == "power":
         try:
             print(f"cmd: {cmd}, system_type: {SYSTEM_TYPE}")
@@ -126,7 +130,13 @@ def handle_server_response(command, client_socket):
             return "file", "PermissionError"
 
     elif cmd_type == "files_list":
-        files_location = cmd
+        if cmd == "CURRENT":
+            if SYSTEM_TYPE == "Linux":
+                files_location = os.getcwd() + "/"
+            else:
+                files_location = os.getcwd() + "\\"
+        else:
+            files_location = cmd
         print(f"file_location: {files_location}")
         try:
             files_list = os.listdir(files_location)
@@ -154,7 +164,7 @@ def handle_server_response(command, client_socket):
             print(f"files: {files}")
             return "files_list", files
         except FileNotFoundError:
-            pass
+            print("FileNotFoundError")
         except PermissionError:
             return "files_list", "PermissionError"
     return "exit", 0

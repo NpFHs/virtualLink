@@ -137,10 +137,8 @@ def handle_server_response(command, client_socket):
                 files_location = os.getcwd() + "\\"
         else:
             files_location = cmd
-        print(f"file_location: {files_location}")
         try:
             files_list = os.listdir(files_location)
-            print(f"files_list: {files_list}")
             counter = 0
             for file in files_list:
                 file_path = f"{files_location}{file}"
@@ -161,7 +159,6 @@ def handle_server_response(command, client_socket):
                 counter += 1
 
             files = BREAK1.join(files_list)
-            print(f"files: {files}")
             return "files_list", files
         except FileNotFoundError:
             print("FileNotFoundError")

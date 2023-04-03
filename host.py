@@ -5,7 +5,6 @@ from tkinter import ttk
 import socket
 from threading import *
 from tkinter import font
-import keyboard
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -244,6 +243,11 @@ def receive_files_list(msg):
     print(f"is_files_list_change: {is_files_list_change}")
 
 
+def reset_pre_command():
+    global current_file_in_files_list
+    current_file_in_files_list = 0
+
+
 def main():
     root = tk.Tk()
     root.tk.call("source", "azure.tcl")
@@ -294,6 +298,8 @@ def main():
         else:
             print("Can't go up anymore!")
 
+        reset_pre_command()
+
     def command_down():
         global current_command
         if -1 > current_command:
@@ -302,13 +308,14 @@ def main():
         else:
             print("Can't go down anymore!")
 
+        reset_pre_command()
+
     def tab_complete(entry):
         global current_file_in_files_list, pre_command
 
         # save the current command only at the first time tab pressed
         if current_file_in_files_list == 0:
             pre_command = command.get()
-            print(f"files_list: {files_list}")
 
         if current_file_in_files_list >= len(files_list):
             current_file_in_files_list = 0
@@ -326,8 +333,9 @@ def main():
         command_entry.delete(0, tk.END)
         current_command = 0
 
-        # reset the current file for tab_complete()
-        current_file_in_files_list = 0
+        # include in bind <Key>.
+        # # reset the current file for tab_complete()
+        # current_file_in_files_list = 0
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((IP, PORT))
@@ -376,12 +384,13 @@ def main():
             messages_frame.pack()
 
             # label = ttk.Label(tabs[tab], text="Enter a command:")
-            # label.pack(side="top", fill="x", padx=10, pady=10)
+            # label.pack(side="top", fill="x", padx=10, pady=10)  # NOQA
             command_entry = ttk.Entry(tabs[tab], textvariable=command)
             command_entry.bind("<Up>", lambda event: command_up())
             command_entry.bind("<Down>", lambda event: command_down())
             command_entry.bind("<Return>", lambda event: send_button())
             command_entry.bind("<Tab>", lambda event: tab_complete(command_entry))
+            command_entry.bind("<Key>", lambda event: reset_pre_command())
             command_entry.pack(side="top", fill="x", padx=10)
             execute_button = ttk.Button(tabs[tab], text="Execute", command=lambda: send_button())
             execute_button.pack(side="top", fill="x", padx=10, pady=10)

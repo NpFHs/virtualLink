@@ -5,6 +5,7 @@ from tkinter import ttk
 import socket
 from threading import *
 from tkinter import font
+from PIL import Image, ImageTk
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -14,7 +15,7 @@ BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
 pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
 current_directory = "/"
-
+SCREEN_WIDTH = 750
 files_list = []
 
 # indicate the current file location for tab_complete()
@@ -101,7 +102,7 @@ def open_folder(browser, client_socket, file_location):
     global is_files_list_change
 
     try:
-        file_iid = browser.selection()[0]  # get the iid of the selected file
+        file_iid = browser.selection()[0]  # get the iid of the selected file. E.g: file_idd: 'I006'.
         file_values = browser.item(file_iid)["values"]
         file_type = file_values[0]
         file_name = file_values[1]
@@ -124,7 +125,7 @@ def open_folder(browser, client_socket, file_location):
         elif file_type == "FILE":
             file_location.set(current_directory + file_name)
         else:
-            print("This is not a directory!")
+            print("The file is not a directory of readable file!")
     except IndexError:
         print("IndexError")
 
@@ -243,9 +244,17 @@ def receive_files_list(msg):
     print(f"is_files_list_change: {is_files_list_change}")
 
 
+def receive_screenshot(msg):
+    print(msg)
+
+
 def reset_pre_command():
     global current_file_in_files_list
     current_file_in_files_list = 0
+
+
+def get_screenshot(client_socket):
+    client_socket.send("screenshot 1".encode())
 
 
 def main():
@@ -282,6 +291,9 @@ def main():
 
                 elif msg_type == "files_list":
                     receive_files_list(msg)
+
+                elif msg_type == "screenshot":
+                    receive_screenshot(msg)
 
                 else:
                     print(f"Wrong message type! (message: {msg_type})")
@@ -354,8 +366,22 @@ def main():
         if tab == "Remote Desktop":
             label = tk.Label(tabs[tab], text="Remote desktop view:")
             label.pack(side="top", fill="x", padx=10, pady=10)
-            canvas = tk.Canvas(tabs[tab], width=400, height=300, bd=1)
-            canvas.pack(side="top", fill="both", expand=True, padx=10, pady=10)
+
+            # create the started chart var
+            start_chart = ImageTk.PhotoImage(
+                Image.open("./images/fullscreen.png").resize((SCREEN_WIDTH, SCREEN_WIDTH * 9 // 16)))
+
+            chart_label = ttk.Label(tabs[tab], image=start_chart)
+            # keep reference to the chart, so it doesn't get prematurely garbage collected at the end of the function
+            chart_label.image = start_chart
+            chart_label.pack()
+
+            get_screenshot_button = ttk.Button(tabs[tab], text="What's on screen?",
+                                               command=lambda: get_screenshot(client_socket))
+            get_screenshot_button.pack()
+
+            # canvas = tk.Canvas(tabs[tab], width=400, height=300, bd=1)
+            # canvas.pack(side="top", fill="both", expand=True, padx=10, pady=10)
 
         # Add elements to the "File Transfer" tab
         elif tab == "File Transfer":
@@ -367,7 +393,6 @@ def main():
             files_label = ttk.Label(tabs[tab], textvariable=files)
             files_label.pack(side="bottom", padx=10, pady=10, anchor="e")
 
-        # TODO: autofill with TAB
         # TODO: export output to file option
         # TODO: support "long live" commands
         # TODO: return errors

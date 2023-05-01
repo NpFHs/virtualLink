@@ -1,6 +1,7 @@
 import socket
 import os
 import platform
+import pyscreenshot as ImageGrab
 
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
@@ -164,6 +165,13 @@ def handle_server_response(command, client_socket):
             print("FileNotFoundError")
         except PermissionError:
             return "files_list", "PermissionError"
+
+    elif cmd_type == "screenshot":
+        img = ImageGrab.grab()
+        img.save("/home/noam/PycharmProjects/virtualLink/images/screen.png")
+
+        send_response(client_socket, "screenshot", img)
+
     return "exit", 0
 
 

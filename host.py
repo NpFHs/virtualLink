@@ -216,6 +216,7 @@ def receive_file(msg, client_socket, files):
         file_name, file_size = msg.split(BREAK1)
 
         file_name = os.path.basename(file_name)
+        # currently not needed.
         # file_size = int(file_size)
         with open(file_name, "wb") as file:
             while True:
@@ -244,7 +245,20 @@ def receive_files_list(msg):
     print(f"is_files_list_change: {is_files_list_change}")
 
 
-def receive_screenshot(msg):
+def receive_screenshot(client_socket, msg):
+    if msg == "start":
+        with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.png", "wb") as current_screen:
+
+            while True:
+                msg_len = client_socket.recv(8)
+                if msg_len.isdigit():
+                    data = client_socket.recv(int(msg_len))
+                    current_screen.write(data)
+                else:
+                    print("wrong message format! (missing length data.)")
+
+    else:
+        print("screenshot format not valid!")
     print(msg)
 
 
@@ -293,7 +307,7 @@ def main():
                     receive_files_list(msg)
 
                 elif msg_type == "screenshot":
-                    receive_screenshot(msg)
+                    receive_screenshot(client_socket, msg)
 
                 else:
                     print(f"Wrong message type! (message: {msg_type})")

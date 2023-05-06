@@ -32,7 +32,7 @@ def send_response(client_socket, msg_type, msg):
     # TODO: split long commands to many packets
     path = os.getcwd()
 
-    if msg_type == "filepart":
+    if msg_type == "filepart" or msg_type == "screenshot_part":
         response = msg
         resp_len = str(len(response)).zfill(8).encode()
         resp = resp_len + response
@@ -44,6 +44,8 @@ def send_response(client_socket, msg_type, msg):
         elif msg_type == "file":
             response = f"{msg_type} {msg}"
         elif msg_type == "files_list":
+            response = f"{msg_type} {msg}"
+        elif msg_type == "screenshot":
             response = f"{msg_type} {msg}"
         else:
             response = f"{msg_type} {path} {msg}"
@@ -74,6 +76,23 @@ def convert_file_size(size):
         unit = "TB"
         converted_size = round(size / 1000000000000, 2)
         return f"{converted_size} {unit}"
+
+
+def take_screenshot(path):
+    """
+    take a screenshot and save it to given path.
+    """
+    img = ImageGrab.grab()
+    img.save(path)
+
+
+def send_screenshot(client_socket, path):
+    with open(path, "rb") as img:
+        while True:
+            data = img.read(BUFFER_SIZE)
+            send_response(client_socket, "screenshot_part", data)
+            if len(data) == 0:
+                break
 
 
 def handle_server_response(command, client_socket):
@@ -167,10 +186,11 @@ def handle_server_response(command, client_socket):
             return "files_list", "PermissionError"
 
     elif cmd_type == "screenshot":
-        img = ImageGrab.grab()
-        img.save("/home/noam/PycharmProjects/virtualLink/images/screen.png")
-
-        send_response(client_socket, "screenshot", img)
+        path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
+        take_screenshot(path)
+        send_response(client_socket, "screenshot", "start")
+        send_screenshot(client_socket, path)
+        return "screenshot", "done"
 
     return "exit", 0
 

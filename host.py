@@ -5,7 +5,10 @@ from tkinter import ttk
 import socket
 from threading import *
 from tkinter import font
+
+import PIL
 from PIL import Image, ImageTk
+import shutil
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -24,6 +27,7 @@ current_file_in_files_list = 0
 pre_command = ""
 
 is_files_list_change = False  # mark when get new files list
+is_screen_live = False
 
 
 # client_dist = "Unknown"
@@ -56,7 +60,11 @@ def log_out(client_socket):
 def get_resp(client_socket):
     msg_len = client_socket.recv(8)
     if msg_len.isdigit():
-        resp = client_socket.recv(int(msg_len)).decode()  # TODO: add more than 1024 bit support.
+        enc_resp = client_socket.recv(int(msg_len))
+        try:
+            resp = enc_resp.decode()
+        except UnicodeDecodeError:
+            print("unknown message!")
     else:
         print("No length info!")
 
@@ -245,21 +253,38 @@ def receive_files_list(msg):
     print(f"is_files_list_change: {is_files_list_change}")
 
 
-def receive_screenshot(client_socket, msg):
+def receive_screenshot(live_screen_socket, msg="start"):
     if msg == "start":
+        # # somehow "wb" mode append instead of re-write the file.
+        # open("/home/noam/PycharmProjects/virtualLink/images/current_screen.png", "w").close()
         with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.png", "wb") as current_screen:
 
             while True:
-                msg_len = client_socket.recv(8)
-                if msg_len.isdigit():
-                    data = client_socket.recv(int(msg_len))
+                data_len = live_screen_socket.recv(8)
+                if data_len.isdigit():
+                    data = live_screen_socket.recv(int(data_len))
+                    # temp; without this lines something goes wrong (the program don't receive the hole screenshot part)
+                    if len(data) != int(data_len):
+                        print(f"{len(data)}:{int(data_len)}")
+
+                    if data == b"screenshot done":
+                        print("screenshot done")
+                        return None
                     current_screen.write(data)
                 else:
-                    print("wrong message format! (missing length data.)")
+                    print("wrong message format! (missing length data)")
+                    print(data_len)
+                    live_screen_socket.recv(10000000)  # clean garbage
+                    # raise "LengthError"
+                    break
+
+        # remove broken file
+        os.remove("/home/noam/PycharmProjects/virtualLink/images/current_screen.png")
+        shutil.copyfile("/home/noam/PycharmProjects/virtualLink/images/bad_image.png",
+                        "/home/noam/PycharmProjects/virtualLink/images/current_screen.png")
 
     else:
         print("screenshot format not valid!")
-    print(msg)
 
 
 def reset_pre_command():
@@ -267,11 +292,38 @@ def reset_pre_command():
     current_file_in_files_list = 0
 
 
-def get_screenshot(client_socket):
-    client_socket.send("screenshot 1".encode())
+def get_screenshot(live_screen_socket, screen_label):
+    # while is_screen_live:
+    #     client_socket.send("screenshot 1".encode())
+    #     time.sleep(0.04)
+    receive_screenshot(live_screen_socket)
+    update_screen(screen_label)
+
+
+def update_screen(screen_label):
+    try:
+        current_screen = ImageTk.PhotoImage(
+            Image.open("./images/current_screen.png").resize((SCREEN_WIDTH, SCREEN_WIDTH * 9 // 16)))
+    except (SyntaxError, PIL.UnidentifiedImageError):
+        current_screen = ImageTk.PhotoImage(
+            Image.open("./images/bad_image.png").resize((SCREEN_WIDTH, SCREEN_WIDTH * 9 // 16)))
+
+    screen_label.configure(image=current_screen)
+    screen_label.image = current_screen
+
+
+def keep_client_screen_alive(live_screen_socket, screen_label):
+    while is_screen_live:
+        get_screenshot(live_screen_socket, screen_label)
+
+
+def stop_live_screen():
+    global is_screen_live
+    is_screen_live = False
 
 
 def main():
+    global is_screen_live
     root = tk.Tk()
     root.tk.call("source", "azure.tcl")
     root.tk.call("set_theme", "dark")
@@ -306,8 +358,9 @@ def main():
                 elif msg_type == "files_list":
                     receive_files_list(msg)
 
-                elif msg_type == "screenshot":
-                    receive_screenshot(client_socket, msg)
+                # elif msg_type == "screenshot":
+                #     receive_screenshot(client_socket, msg)
+                #     update_screen(screen_label)
 
                 else:
                     print(f"Wrong message type! (message: {msg_type})")
@@ -346,10 +399,13 @@ def main():
         if current_file_in_files_list >= len(files_list):
             current_file_in_files_list = 0
 
-        file_name = files_list[current_file_in_files_list].split(BREAK2)[1]
-        command.set(f"{pre_command} {file_name}")
-        current_file_in_files_list += 1
-        entry.icursor(tk.END)
+        try:
+            file_name = files_list[current_file_in_files_list].split(BREAK2)[1]
+            command.set(f"{pre_command} {file_name}")
+            current_file_in_files_list += 1
+            entry.icursor(tk.END)
+        except IndexError:
+            pass
         return "break"
 
     def send_button():
@@ -366,7 +422,9 @@ def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((IP, PORT))
     server_socket.listen()
+
     client_socket, client_address = server_socket.accept()
+    live_screen_socket, client_address = server_socket.accept()
 
     # keep the files list updated
     request_files_in_location(client_socket)
@@ -382,17 +440,16 @@ def main():
             label.pack(side="top", fill="x", padx=10, pady=10)
 
             # create the started chart var
-            start_chart = ImageTk.PhotoImage(
+            start_screen = ImageTk.PhotoImage(
                 Image.open("./images/fullscreen.png").resize((SCREEN_WIDTH, SCREEN_WIDTH * 9 // 16)))
 
-            chart_label = ttk.Label(tabs[tab], image=start_chart)
+            screen_label = ttk.Label(tabs[tab], image=start_screen)
             # keep reference to the chart, so it doesn't get prematurely garbage collected at the end of the function
-            chart_label.image = start_chart
-            chart_label.pack()
+            screen_label.image = start_screen
+            screen_label.pack()
 
-            get_screenshot_button = ttk.Button(tabs[tab], text="What's on screen?",
-                                               command=lambda: get_screenshot(client_socket))
-            get_screenshot_button.pack()
+            get_screenshot_button = ttk.Button(tabs[tab], text="stop", command=lambda: stop_live_screen())
+            get_screenshot_button.pack(pady=20, padx=20, fill="y")
 
             # canvas = tk.Canvas(tabs[tab], width=400, height=300, bd=1)
             # canvas.pack(side="top", fill="both", expand=True, padx=10, pady=10)
@@ -454,10 +511,14 @@ def main():
 
     receive_thread = Thread(target=receive)
     receive_thread.start()
+    client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, screen_label))
+    is_screen_live = True
+    client_live_screen.start()
     root.mainloop()
 
     client_socket.send("exit 0".encode())
     is_alive = False
+    is_screen_live = False
     server_socket.close()
     client_socket.close()
 

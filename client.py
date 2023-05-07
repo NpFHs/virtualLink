@@ -1,7 +1,10 @@
 import socket
 import os
 import platform
+import time
+
 import pyscreenshot as ImageGrab
+from threading import *
 
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
@@ -86,16 +89,24 @@ def take_screenshot(path):
     img.save(path)
 
 
-def send_screenshot(client_socket, path):
+def send_screenshot(live_screen_socket, path):
     with open(path, "rb") as img:
         while True:
             data = img.read(BUFFER_SIZE)
-            send_response(client_socket, "screenshot_part", data)
             if len(data) == 0:
                 break
+            send_response(live_screen_socket, "screenshot_part", data)
 
 
-def handle_server_response(command, client_socket):
+def handle_screenshot(live_screen_socket):
+    path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
+    take_screenshot(path)
+    # send_response(live_screen_socket, "screenshot", "start")
+    send_screenshot(live_screen_socket, path)
+    return "screenshot", "done"
+
+
+def handle_server_response(command, client_socket, live_screen_socket):
     cmd_type = command.split()[0]
     cmd = " ".join(command.split()[1:])
 
@@ -186,11 +197,7 @@ def handle_server_response(command, client_socket):
             return "files_list", "PermissionError"
 
     elif cmd_type == "screenshot":
-        path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
-        take_screenshot(path)
-        send_response(client_socket, "screenshot", "start")
-        send_screenshot(client_socket, path)
-        return "screenshot", "done"
+        return handle_screenshot(live_screen_socket)
 
     return "exit", 0
 
@@ -200,10 +207,25 @@ def send_basic_info(client_socket):
     send_response(client_socket, "sys_info", f"name {SYSTEM_NAME}")
 
 
+def keep_sending_screenshots(live_screen_socket):
+    while True:
+        msg_type, msg = handle_screenshot(live_screen_socket)
+        send_response(live_screen_socket, msg_type, msg)
+        print("screenshot sent")
+        time.sleep(0.04)
+
+
 def main():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((IP, PORT))
     print("Client connected")
+
+    live_screen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    live_screen_socket.connect((IP, PORT))
+    print("Live screen connected")
+
+    live_screen = Thread(target=lambda: keep_sending_screenshots(live_screen_socket))
+    live_screen.start()
 
     send_basic_info(client_socket)
     os.chdir("/")
@@ -211,7 +233,7 @@ def main():
     while command != "exit 0":
         command = client_socket.recv(1024).decode()
         if len(command.split()) >= 2:
-            cmd_type, cmd = handle_server_response(command, client_socket)
+            cmd_type, cmd = handle_server_response(command, client_socket, live_screen_socket)
         else:
             cmd_type = "Error"
             cmd = "Wrong format"

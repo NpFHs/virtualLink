@@ -5,7 +5,7 @@ from tkinter import ttk
 import socket
 from threading import *
 from tkinter import font
-
+import rsa
 import PIL
 from PIL import Image, ImageTk
 import shutil
@@ -14,7 +14,6 @@ IP: str = "0.0.0.0"
 PORT: int = 8091
 BREAK1 = "<BREAK1>"  # use to split between LEVEL1 data
 BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
-
 pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
 current_directory = "/"
@@ -33,7 +32,17 @@ is_screen_live = False
 # client_dist = "Unknown"
 
 
-# TODO: add multiple clients support.
+# TODO: add multiple clients support. update: maybe not...
+
+def encrypt(msg, public_key):
+    enc_msg = rsa.encrypt(msg.encode(), public_key)
+    return enc_msg
+
+
+def decrypt(msg, private_key):
+    # add except for case of failure in decryption.
+    origin_msg = rsa.decrypt(msg, private_key).decode()
+    return origin_msg
 
 
 def shutdown(client_socket):
@@ -64,6 +73,7 @@ def get_resp(client_socket):
         try:
             resp = enc_resp.decode()
         except UnicodeDecodeError:
+            resp = "unknown message!"
             print("unknown message!")
     else:
         print("No length info!")
@@ -337,6 +347,8 @@ def main():
     command = tk.StringVar(value="Enter a command")
     files = tk.StringVar()
     mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
+
+    public_key, private_key = rsa.newkeys(2048)
 
     is_alive = True
 

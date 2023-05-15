@@ -21,7 +21,6 @@ CLIENT_SCREEN_WIDTH = 750
 files_list = []
 public_key, private_key = rsa.newkeys(2048)
 client_public_key = None
-print(f"client_public_key start: {client_public_key}")
 # indicate the current file location for tab_complete()
 current_file_in_files_list = 0
 # save the original command for tab_complete()
@@ -385,7 +384,8 @@ def main():
 
                 elif msg_type == "public_key":
                     client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
-                    print(f"\ntype(client_public_key): {type(client_public_key)}\nclient_public_key: {client_public_key}\n")
+                    print(
+                        f"\ntype(client_public_key): {type(client_public_key)}\nclient_public_key: {client_public_key}\n")
 
                 else:
                     print(f"Wrong message type! (message: {msg_type})")
@@ -537,6 +537,11 @@ def main():
     client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, screen_label))
     is_screen_live = True
     client_live_screen.start()
+
+    while True:
+        if client_public_key != None:
+            break
+        time.sleep(0.1)
 
     # keep the files list updated
     request_files_in_location(client_socket)

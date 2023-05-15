@@ -17,9 +17,11 @@ BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
 pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
 current_directory = "/"
-SCREEN_WIDTH = 750
+CLIENT_SCREEN_WIDTH = 750
 files_list = []
-
+public_key, private_key = rsa.newkeys(2048)
+client_public_key = None
+print(f"client_public_key start: {client_public_key}")
 # indicate the current file location for tab_complete()
 current_file_in_files_list = 0
 # save the original command for tab_complete()
@@ -34,20 +36,28 @@ is_screen_live = False
 
 # TODO: add multiple clients support. update: maybe not...
 
-def encrypt(msg, public_key):
-    enc_msg = rsa.encrypt(msg.encode(), public_key)
+def encrypt(msg):
+    try:
+        enc_msg = rsa.encrypt(msg.encode(), client_public_key)
+    except:
+        print("Encryption error")
+        enc_msg = b"error"
     return enc_msg
 
 
-def decrypt(msg, private_key):
+def decrypt(msg):
     # add except for case of failure in decryption.
-    origin_msg = rsa.decrypt(msg, private_key).decode()
+    origin_msg = rsa.decrypt(msg, private_key)
     return origin_msg
+
+
+def send_public_key(client_socket):
+    pass
 
 
 def shutdown(client_socket):
     command = f"power shutdown"
-    client_socket.send(command.encode())
+    client_socket.send(encrypt(command))
     print(command)
 
 
@@ -56,13 +66,13 @@ def restart(client_socket):
     Sent restart command to the client.
     """
     command = f"power restart"
-    client_socket.send(command.encode())
+    client_socket.send(encrypt(command))
     print(command)
 
 
 def log_out(client_socket):
     command = f"power log_out"
-    client_socket.send(command.encode())
+    client_socket.send(encrypt(command))
     print(command)
 
 
@@ -70,23 +80,26 @@ def get_resp(client_socket):
     msg_len = client_socket.recv(8)
     if msg_len.isdigit():
         enc_resp = client_socket.recv(int(msg_len))
-        try:
-            resp = enc_resp.decode()
-        except UnicodeDecodeError:
-            resp = "unknown message!"
-            print("unknown message!")
+        print(f"enc_resp: {enc_resp}")
+
+        resp = enc_resp
+        # try:
+        #     resp = enc_resp.decode()
+        # except UnicodeDecodeError:
+        #     resp = "unknown message!"
+        #     print("unknown message!")
     else:
         print("No length info!")
 
         # clean possible garbage
         client_socket.recv(16777216)
-        resp = "Error, no length info!"
+        resp = b"Error, no length info!"
 
     try:
-        msg_type = resp.split()[0]
+        msg_type = resp.split()[0].decode()
     except IndexError:
         msg_type = "Error"
-    msg = " ".join(resp.split(" ")[1:])
+    msg = b" ".join(resp.split(b" ")[1:])
 
     return msg_type, msg
 
@@ -96,7 +109,7 @@ def execute_command(client_socket, cmd, msg_list):
         msg_list.delete(0, tk.END)
     else:
         command = f"execute {cmd}"
-        client_socket.send(command.encode())
+        client_socket.send(encrypt(command))
 
     # keep the files list up to date
     if cmd.split()[0] == "cd":
@@ -104,7 +117,7 @@ def execute_command(client_socket, cmd, msg_list):
 
 
 def request_file(file_location, client_socket):
-    client_socket.send(f"file {file_location}".encode())
+    client_socket.send(encrypt(f"file {file_location}"))
 
 
 def request_files_in_location(client_socket, location="CURRENT"):
@@ -112,7 +125,7 @@ def request_files_in_location(client_socket, location="CURRENT"):
     Used to get list of files in given location.
     if not given, return list of the files in the client current directory.
     """
-    client_socket.send(f"files_list {location}".encode())
+    client_socket.send(encrypt(f"files_list {location}"))
 
 
 def open_folder(browser, client_socket, file_location):
@@ -275,15 +288,14 @@ def receive_screenshot(live_screen_socket, msg="start"):
                     data = live_screen_socket.recv(int(data_len))
                     # temp; without this lines something goes wrong (the program don't receive the hole screenshot part)
                     if len(data) != int(data_len):
-                        print(f"{len(data)}:{int(data_len)}")
-
+                        # print(f"{len(data)}:{int(data_len)}")
+                        pass
                     if data == b"screenshot done":
-                        print("screenshot done")
                         return None
                     current_screen.write(data)
                 else:
                     print("wrong message format! (missing length data)")
-                    print(data_len)
+                    # print(f"data_len: {data_len}")
                     live_screen_socket.recv(10000000)  # clean garbage
                     # raise "LengthError"
                     break
@@ -313,10 +325,10 @@ def get_screenshot(live_screen_socket, screen_label):
 def update_screen(screen_label):
     try:
         current_screen = ImageTk.PhotoImage(
-            Image.open("./images/current_screen.png").resize((SCREEN_WIDTH, SCREEN_WIDTH * 9 // 16)))
+            Image.open("./images/current_screen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
     except (SyntaxError, PIL.UnidentifiedImageError):
         current_screen = ImageTk.PhotoImage(
-            Image.open("./images/bad_image.png").resize((SCREEN_WIDTH, SCREEN_WIDTH * 9 // 16)))
+            Image.open("./images/bad_image.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
     screen_label.configure(image=current_screen)
     screen_label.image = current_screen
@@ -348,31 +360,32 @@ def main():
     files = tk.StringVar()
     mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
 
-    public_key, private_key = rsa.newkeys(2048)
-
     is_alive = True
 
     def receive():
+        global public_key, client_public_key
         print("Start receiving")
         while is_alive:
             try:
                 msg_type, msg = get_resp(client_socket)
 
+                print(f"type(msg): {type(msg)}")
+                print(f"msg: {msg}")
                 if msg_type == "sys_info":
-                    receive_sys_info(msg, client_dist, client_name_with_name, client_name)
+                    receive_sys_info(msg.decode(), client_dist, client_name_with_name, client_name)
 
                 elif msg_type == "execute":
-                    receive_execute(msg, msg_list, client_name)
+                    receive_execute(msg.decode(), msg_list, client_name)
 
                 elif msg_type == "file":
-                    receive_file(msg, client_socket, files)
+                    receive_file(msg.decode(), client_socket, files)
 
                 elif msg_type == "files_list":
-                    receive_files_list(msg)
+                    receive_files_list(msg.decode())
 
-                # elif msg_type == "screenshot":
-                #     receive_screenshot(client_socket, msg)
-                #     update_screen(screen_label)
+                elif msg_type == "public_key":
+                    client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
+                    print(f"\ntype(client_public_key): {type(client_public_key)}\nclient_public_key: {client_public_key}\n")
 
                 else:
                     print(f"Wrong message type! (message: {msg_type})")
@@ -434,12 +447,10 @@ def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((IP, PORT))
     server_socket.listen()
+    print("Listening...")
 
     client_socket, client_address = server_socket.accept()
     live_screen_socket, client_address = server_socket.accept()
-
-    # keep the files list updated
-    request_files_in_location(client_socket)
 
     tabs = {}
     for tab in ("Remote Desktop", "File Transfer", "Command Prompt", "Power Management"):
@@ -453,7 +464,7 @@ def main():
 
             # create the started chart var
             start_screen = ImageTk.PhotoImage(
-                Image.open("./images/fullscreen.png").resize((SCREEN_WIDTH, SCREEN_WIDTH * 9 // 16)))
+                Image.open("./images/fullscreen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
             screen_label = ttk.Label(tabs[tab], image=start_screen)
             # keep reference to the chart, so it doesn't get prematurely garbage collected at the end of the function
@@ -526,9 +537,13 @@ def main():
     client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, screen_label))
     is_screen_live = True
     client_live_screen.start()
+
+    # keep the files list updated
+    request_files_in_location(client_socket)
+
     root.mainloop()
 
-    client_socket.send("exit 0".encode())
+    client_socket.send(encrypt("exit 0"))
     is_alive = False
     is_screen_live = False
     server_socket.close()

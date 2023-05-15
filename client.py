@@ -2,13 +2,15 @@ import socket
 import os
 import platform
 import time
-
+import rsa
 import pyscreenshot as ImageGrab
 from threading import *
 
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
+public_key, private_key = rsa.newkeys(2048)
+host_public_key = None
 
 try:
     PORT = int(input("Please enter the host PORT (8091): "))
@@ -31,6 +33,21 @@ power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
                               "Linux": "gnome-session-quit --no-prompt"}}
 
 
+def encrypt(msg):
+    enc_msg = rsa.encrypt(msg.encode(), host_public_key)
+    return enc_msg
+
+
+def decrypt(msg):
+    # add except for case of failure in decryption.
+    try:
+        origin_msg = rsa.decrypt(msg, private_key)
+    except rsa.pkcs1.DecryptionError:
+        print("DecryptionError")
+        origin_msg = b"Error"
+    return origin_msg
+
+
 def send_response(client_socket, msg_type, msg):
     # TODO: split long commands to many packets
     path = os.getcwd()
@@ -43,18 +60,20 @@ def send_response(client_socket, msg_type, msg):
 
     else:
         if msg_type == "sys_info":
-            response = f"{msg_type} {msg}"
+            response = f"{msg_type} {msg}".encode()
         elif msg_type == "file":
-            response = f"{msg_type} {msg}"
+            response = f"{msg_type} {msg}".encode()
         elif msg_type == "files_list":
-            response = f"{msg_type} {msg}"
+            response = f"{msg_type} {msg}".encode()
         elif msg_type == "screenshot":
-            response = f"{msg_type} {msg}"
+            response = f"{msg_type} {msg}".encode()
+        elif msg_type == "public_key":
+            response = msg_type.encode() + b" " + msg
         else:
-            response = f"{msg_type} {path} {msg}"
-        resp_len = str(len(response.encode())).zfill(8)
+            response = f"{msg_type} {path} {msg}".encode()
+        resp_len = str(len(response)).zfill(8).encode()
         resp = resp_len + response
-        client_socket.send(resp.encode())
+        client_socket.send(resp)
 
 
 def convert_file_size(size):
@@ -207,11 +226,15 @@ def send_basic_info(client_socket):
     send_response(client_socket, "sys_info", f"name {SYSTEM_NAME}")
 
 
+def send_public_key(client_socket):
+    print(public_key.save_pkcs1(format="DER"))
+    send_response(client_socket, "public_key", public_key.save_pkcs1(format="DER"))
+
+
 def keep_sending_screenshots(live_screen_socket):
     while True:
         msg_type, msg = handle_screenshot(live_screen_socket)
         send_response(live_screen_socket, msg_type, msg)
-        print("screenshot sent")
         time.sleep(0.04)
 
 
@@ -227,11 +250,14 @@ def main():
     live_screen = Thread(target=lambda: keep_sending_screenshots(live_screen_socket))
     live_screen.start()
 
+    send_public_key(client_socket)
     send_basic_info(client_socket)
+
     os.chdir("/")
     command = ""
     while command != "exit 0":
-        command = client_socket.recv(1024).decode()
+        command = decrypt(client_socket.recv(1024)).decode()
+        print(f"command: {command}")
         if len(command.split()) >= 2:
             cmd_type, cmd = handle_server_response(command, client_socket, live_screen_socket)
         else:

@@ -14,8 +14,10 @@ public_key, private_key = rsa.newkeys(2048)
 host_public_key = None
 if SYSTEM_TYPE == "Windows":
     screenshot_path = r"C:\images\screen.png"
+    compressed_screenshot_path = r"C:\images\screen.png"
 else:
-    screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
+    screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
+    compressed_screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
     # screenshot_path = "images/screen.png"
 
 try:
@@ -167,8 +169,8 @@ def send_screenshot(live_screen_socket, path):
 
 def handle_screenshot(live_screen_socket):
     take_screenshot(screenshot_path)
-    compress_img(screenshot_path, new_size_ratio=0.5, quality=50, to_jpg=False)
-    send_screenshot(live_screen_socket, screenshot_path)
+    compress_img(screenshot_path, new_size_ratio=0.5, quality=50)
+    send_screenshot(live_screen_socket, compressed_screenshot_path)
     return "screenshot", "done"
 
 

@@ -426,7 +426,7 @@ def receive_screenshot(live_screen_socket, msg="start"):
                 data_len = live_screen_socket.recv(8)
                 # print(f"data_len: {data_len}")
                 if data_len.isdigit():
-                    time.sleep(0.01)
+                    time.sleep(0.05)
                     data = live_screen_socket.recv(int(data_len))
                     # print(f"len(data): {len(data)}")
                     # temp; without this lines something goes wrong (the program don't receive the hole screenshot part)

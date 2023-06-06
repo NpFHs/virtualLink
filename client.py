@@ -5,12 +5,18 @@ import time
 import rsa
 import pyscreenshot as ImageGrab
 from threading import *
+from PIL import Image
 
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
 public_key, private_key = rsa.newkeys(2048)
 host_public_key = None
+if SYSTEM_TYPE == "Windows":
+    screenshot_path = r"C:\images\screen.png"
+else:
+    screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
+    # screenshot_path = "images/screen.png"
 
 try:
     PORT = int(input("Please enter the host PORT (8091): "))
@@ -46,6 +52,42 @@ def decrypt(msg):
         print("DecryptionError")
         origin_msg = b"Error"
     return origin_msg
+
+
+def compress_img(image_name, new_size_ratio=0.9, quality=90, width=None, height=None, to_jpg=True):
+    # load the image to memory
+    img = Image.open(image_name)
+    # get the original image size in bytes
+    image_size = os.path.getsize(image_name)
+    if new_size_ratio < 1.0:
+        # if resizing ratio is below 1.0, then multiply width & height with this ratio to reduce image size
+        img = img.resize((int(img.size[0] * new_size_ratio), int(img.size[1] * new_size_ratio)), Image.ANTIALIAS)
+    elif width and height:
+        # if width and height are set, resize with them instead
+        img = img.resize((width, height), Image.ANTIALIAS)
+    # split the filename and extension
+    filename, ext = os.path.splitext(image_name)
+    # make new filename appending _compressed to the original file name
+    if to_jpg:
+        # change the extension to JPEG
+        new_filename = f"{filename}.jpg"
+    else:
+        # retain the same extension of the original image
+        new_filename = f"{filename}{ext}"
+    try:
+        # save the image with the corresponding quality and optimize set to True
+        img.save(new_filename, quality=quality, optimize=True)
+    except OSError:
+        # convert the image to RGB mode first
+        img = img.convert("RGB")
+        # save the image with the corresponding quality and optimize set to True
+        img.save(new_filename, quality=quality, optimize=True)
+    # get the new image size in bytes
+    new_image_size = os.path.getsize(new_filename)
+    # calculate the saving bytes
+    saving_diff = new_image_size - image_size
+    print(f"[+] Image size change: {saving_diff / image_size * 100:.2f}% of the original image size.")
+    return new_filename
 
 
 def send_response(client_socket, msg_type, msg):
@@ -111,17 +153,22 @@ def take_screenshot(path):
 def send_screenshot(live_screen_socket, path):
     with open(path, "rb") as img:
         while True:
-            data = img.read(BUFFER_SIZE)
-            if len(data) == 0:
+            status_code = live_screen_socket.recv(1024).decode()
+            if status_code == "1":
+                data = img.read(BUFFER_SIZE)
+                if len(data) == 0:
+                    print("screenshot sent!")
+                    break
+                send_response(live_screen_socket, "screenshot_part", data)
+            else:
+                print(status_code + ", Error")
                 break
-            send_response(live_screen_socket, "screenshot_part", data)
 
 
 def handle_screenshot(live_screen_socket):
-    path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
-    take_screenshot(path)
-    # send_response(live_screen_socket, "screenshot", "start")
-    send_screenshot(live_screen_socket, path)
+    take_screenshot(screenshot_path)
+    compress_img(screenshot_path, new_size_ratio=0.5, quality=50, to_jpg=False)
+    send_screenshot(live_screen_socket, screenshot_path)
     return "screenshot", "done"
 
 
@@ -233,9 +280,10 @@ def send_public_key(client_socket):
 
 def keep_sending_screenshots(live_screen_socket):
     while True:
+        # wait until the host get the screenshot
         msg_type, msg = handle_screenshot(live_screen_socket)
+        # send the "screenshot done" msg.
         send_response(live_screen_socket, msg_type, msg)
-        time.sleep(0.04)
 
 
 def main():

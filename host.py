@@ -1,4 +1,5 @@
 import os.path
+import struct
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -24,108 +25,156 @@ client_public_key = None
 current_file_in_files_list = 0  # indicate the current file location for tab_complete()
 pre_command = ""  # save the original command for tab_complete()\
 is_files_list_change = False  # mark when get new files list
-is_screen_live = False
+is_screen_live = True
+is_alive = True
 
 
 # TODO: add multiple clients support. update: maybe not...
 
 
 class UserInterface(ttk.Frame):
-    def __init__(self, root, client_socket, client_address):
+    def __init__(self, root):
         ttk.Frame.__init__(self)
 
         root.geometry("800x610")
-        tab_frame = ttk.Notebook()
-        tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
-        client_dist = tk.StringVar(value="Unknown")
-        client_name = tk.StringVar(value="Unknown")
-        client_name_with_name = tk.StringVar(value="Unknown")
-        command = tk.StringVar(value="Enter a command")
-        files = tk.StringVar()
-        mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
+        self.tab_frame = ttk.Notebook()
+        self.tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+        self.client_dist = tk.StringVar(value="Unknown")
+        self.client_name = tk.StringVar(value="Unknown")
+        self.client_name_with_name = tk.StringVar(value="Unknown")
+        self.command = tk.StringVar(value="Enter a command")
+        self.files = tk.StringVar()
+        self.mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
 
-        tabs = {}
+        self.client_address = "unknown"
+
+        # flags that the buttons effect on
+        self.restart_flag = False
+        self.log_out_flag = False
+        self.shutdown_flag = False
+        self.execute_flag = False
+        self.browser_flag = False
+        self.stop_live_screen_flag = False
+        self.reset_pre_commands_flag = False
+        self.command_up_flag = False
+        self.command_down_flag = False
+        self.tab_complete_flag = False
+
+        self.tabs = {}
         for tab in ("Remote Desktop", "File Transfer", "Command Prompt", "Power Management"):
-            tabs[tab] = tk.Frame(tab_frame)
-            tab_frame.add(tabs[tab], text=tab)
+            self.tabs[tab] = tk.Frame(self.tab_frame)
+            self.tab_frame.add(self.tabs[tab], text=tab)
 
             # Add elements to the "Remote Desktop" tab
             if tab == "Remote Desktop":
-                label = tk.Label(tabs[tab], text="Remote desktop view:")
+                label = tk.Label(self.tabs[tab], text="Remote desktop view:")
                 label.pack(side="top", fill="x", padx=10, pady=10)
 
                 # create the started chart var
                 start_screen = ImageTk.PhotoImage(
                     Image.open("./images/fullscreen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
-                screen_label = ttk.Label(tabs[tab], image=start_screen)
-                # keep reference to the chart so it doesn't get prematurely garbage collected at the end of the function
-                screen_label.image = start_screen
-                screen_label.pack()
+                self.screen_label = ttk.Label(self.tabs[tab], image=start_screen)
+                # keep reference to the img, so it doesn't get prematurely garbage collected at the end of the function
+                self.screen_label.image = start_screen
+                self.screen_label.pack()
 
-                get_screenshot_button = ttk.Button(tabs[tab], text="stop", command=lambda: stop_live_screen())
-                get_screenshot_button.pack(pady=20, padx=20, fill="y")
+                self.get_screenshot_button = ttk.Button(self.tabs[tab], text="stop",
+                                                        command=lambda: self.stop_live_screen())
+                self.get_screenshot_button.pack(pady=20, padx=20, fill="y")
 
                 # canvas = tk.Canvas(tabs[tab], width=400, height=300, bd=1)
                 # canvas.pack(side="top", fill="both", expand=True, padx=10, pady=10)
 
             # Add elements to the "File Transfer" tab
             elif tab == "File Transfer":
-                label = ttk.Label(tabs[tab], text="Select a file to transfer:")
-                label.pack(side="top", fill="x", padx=10, pady=10)
-                file_button = ttk.Button(tabs[tab], text="Browse...", command=lambda: browse_files(root, client_socket))
-                file_button.pack(side="top", fill="x", padx=10, pady=10)
+                self.label = ttk.Label(self.tabs[tab], text="Select a file to transfer:")
+                self.label.pack(side="top", fill="x", padx=10, pady=10)
+                self.file_button = ttk.Button(self.tabs[tab], text="Browse...", command=lambda: self.browse_files())
+                self.file_button.pack(side="top", fill="x", padx=10, pady=10)
 
-                files_label = ttk.Label(tabs[tab], textvariable=files)
-                files_label.pack(side="bottom", padx=10, pady=10, anchor="e")
+                self.files_label = ttk.Label(self.tabs[tab], textvariable=self.files)
+                self.files_label.pack(side="bottom", padx=10, pady=10, anchor="e")
 
             # TODO: export output to file option
             # TODO: support "long live" commands
             # TODO: return errors
+            # TODO: add hebrew support in windows
             # Add elements to the "Command Prompt" tab
             elif tab == "Command Prompt":
-                messages_frame = ttk.Frame(tabs[tab])
-                scrollbar = ttk.Scrollbar(messages_frame)
-                msg_list = tk.Listbox(messages_frame, yscrollcommand=scrollbar.set, width=100, height=25,
-                                      selectbackground="#333333", highlightthickness=0, activestyle="none",
-                                      font=mono_font)
-                scrollbar["command"] = msg_list.yview
-                scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=15)
-                msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
-                messages_frame.pack()
+                self.execute_button = ttk.Button(self.tabs[tab], text="Execute", command=lambda: self.send_button())
+                self.execute_button.pack(side="bottom", fill="x", padx=10, pady=10)
+                self.command_entry = ttk.Entry(self.tabs[tab], textvariable=self.command)
+                self.command_entry.bind("<Up>", lambda event: self.command_up())
+                self.command_entry.bind("<Down>", lambda event: self.command_down())
+                self.command_entry.bind("<Return>", lambda event: self.send_button())
+                self.command_entry.bind("<Tab>", lambda event: self.tab_complete())
+                self.command_entry.bind("<Key>", lambda event: self.reset_pre_command())
+                self.command_entry.pack(side="bottom", fill="x", padx=10)
 
-                # label = ttk.Label(tabs[tab], text="Enter a command:")
-                # label.pack(side="top", fill="x", padx=10, pady=10)  # NOQA
-                command_entry = ttk.Entry(tabs[tab], textvariable=command)
-                command_entry.bind("<Up>", lambda event: command_up(command))
-                command_entry.bind("<Down>", lambda event: command_down(command))
-                command_entry.bind("<Return>",
-                                   lambda event: send_button(client_socket, command_entry, msg_list, command))
-                command_entry.bind("<Tab>", lambda event: tab_complete(command_entry, command))
-                command_entry.bind("<Key>", lambda event: reset_pre_command())
-                command_entry.pack(side="top", fill="x", padx=10)
-                execute_button = ttk.Button(tabs[tab], text="Execute",
-                                            command=lambda: send_button(client_socket, command_entry, msg_list,
-                                                                        command))
-                execute_button.pack(side="top", fill="x", padx=10, pady=10)
+                self.messages_frame = ttk.Frame(self.tabs[tab])
+                self.scrollbar = ttk.Scrollbar(self.messages_frame)
+                self.msg_list = tk.Listbox(self.messages_frame, yscrollcommand=self.scrollbar.set, width=100, height=25,
+                                           selectbackground="#333333", highlightthickness=0, activestyle="none",
+                                           font=self.mono_font)
+                self.scrollbar["command"] = self.msg_list.yview
+                self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=15)
+                self.msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
+                self.messages_frame.pack()
 
             # Add elements to the "Power Management" tab
             elif tab == "Power Management":
-                shutdown_button = ttk.Button(tabs[tab], text="Shutdown", command=lambda: shutdown(client_socket))
-                shutdown_button.pack(side="top", fill="x", padx=10, pady=10)
-                restart_button = ttk.Button(tabs[tab], text="Restart", command=lambda: restart(client_socket))
-                restart_button.pack(side="top", fill="x", padx=10, pady=10)
-                logout_button = ttk.Button(tabs[tab], text="Log Out", command=lambda: log_out(client_socket))
-                logout_button.pack(side="top", fill="x", padx=10, pady=10)
+                self.shutdown_button = ttk.Button(self.tabs[tab], text="Shutdown", command=lambda: self.shutdown())
+                self.shutdown_button.pack(side="top", fill="x", padx=10, pady=10)
+                self.restart_button = ttk.Button(self.tabs[tab], text="Restart", command=lambda: self.restart())
+                self.restart_button.pack(side="top", fill="x", padx=10, pady=10)
+                self.logout_button = ttk.Button(self.tabs[tab], text="Log Out", command=lambda: self.log_out())
+                self.logout_button.pack(side="top", fill="x", padx=10, pady=10)
 
-                ip_label = ttk.Label(tabs[tab], text=f"ip address: {client_address}")
-                ip_label.pack(side="bottom", padx=10, pady=5)
-                dist_label = ttk.Label(tabs[tab], textvariable=client_dist)
-                dist_label.pack(side="bottom", padx=10, pady=5)
-                name_label = ttk.Label(tabs[tab], textvariable=client_name_with_name)
-                name_label.pack(side="bottom", padx=10, pady=5)
-                panel_label = ttk.Label(tabs[tab], text="system information:")
-                panel_label.pack(side="bottom", padx=10, pady=10)
+                self.ip_label = ttk.Label(self.tabs[tab], text=f"ip address: {self.client_address}")
+                self.ip_label.pack(side="bottom", padx=10, pady=5)
+                self.dist_label = ttk.Label(self.tabs[tab], textvariable=self.client_dist)
+                self.dist_label.pack(side="bottom", padx=10, pady=5)
+                self.name_label = ttk.Label(self.tabs[tab], textvariable=self.client_name_with_name)
+                self.name_label.pack(side="bottom", padx=10, pady=5)
+                self.panel_label = ttk.Label(self.tabs[tab], text="system information:")
+                self.panel_label.pack(side="bottom", padx=10, pady=10)
+
+    def set_client_address(self, client_address):
+        self.client_address = client_address
+        self.ip_label.configure(text=f"ip address: {self.client_address}")
+
+    def send_button(self):
+        self.execute_flag = True
+
+    def restart(self):
+        self.restart_flag = True
+
+    def log_out(self):
+        self.log_out_flag = True
+
+    def shutdown(self):
+        self.shutdown_flag = True
+
+    def browse_files(self):
+        self.browser_flag = True
+
+    def stop_live_screen(self):
+        self.stop_live_screen_flag = True
+
+    def reset_pre_command(self):
+        self.reset_pre_commands_flag = True
+
+    def command_up(self):
+        self.command_up_flag = True
+
+    def command_down(self):
+        self.command_down_flag = True
+
+    def tab_complete(self):
+        self.tab_complete_flag = True
+        # disable focus change when tab pressed.
+        return "break"
 
 
 def encrypt(msg):
@@ -191,16 +240,19 @@ def get_resp(client_socket):
     return msg_type, msg
 
 
-def execute_command(client_socket, cmd, msg_list):
-    if cmd == "clear":
-        msg_list.delete(0, tk.END)
-    else:
-        command = f"execute {cmd}"
-        client_socket.send(encrypt(command))
+def execute_command(client_socket, ui):
+    cmd = ui.command_entry.get()
+    # avoid index error on empty command
+    if cmd:
+        if cmd == "clear":
+            ui.msg_list.delete(0, tk.END)
+        else:
+            command = f"execute {cmd}"
+            client_socket.send(encrypt(command))
 
-    # keep the files list up to date
-    if cmd.split()[0] == "cd":
-        request_files_in_location(client_socket)
+        # keep the files list up to date
+        if cmd.split()[0] == "cd":
+            request_files_in_location(client_socket)
 
 
 def request_file(file_location, client_socket):
@@ -369,27 +421,42 @@ def receive_screenshot(live_screen_socket, msg="start"):
         # open("/home/noam/PycharmProjects/virtualLink/images/current_screen.png", "w").close()
         with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.png", "wb") as current_screen:
 
+            live_screen_socket.send("1".encode())
             while True:
                 data_len = live_screen_socket.recv(8)
+                # print(f"data_len: {data_len}")
                 if data_len.isdigit():
+                    time.sleep(0.01)
                     data = live_screen_socket.recv(int(data_len))
+                    # print(f"len(data): {len(data)}")
                     # temp; without this lines something goes wrong (the program don't receive the hole screenshot part)
                     if len(data) != int(data_len):
                         # print(f"{len(data)}:{int(data_len)}")
                         pass
                     if data == b"screenshot done":
+                        print("pre screen updated.")
+
+                        # save the current screen for case of broken one in the next time
+                        shutil.copyfile("./images/current_screen.png", "./images/pre_screen.png")
                         return None
                     current_screen.write(data)
+                    live_screen_socket.send("1".encode())
+
                 else:
                     print("wrong message format! (missing length data)")
                     # print(f"data_len: {data_len}")
-                    live_screen_socket.recv(10000000)  # clean garbage
+                    # clean garbage
+                    trash = live_screen_socket.recv(16777216)
+                    print(f"len(trash): {len(trash)}")
+                    # tell the client to re-send the image
+                    live_screen_socket.send("2".encode())
                     # raise "LengthError"
                     break
 
+
         # remove broken file
         os.remove("/home/noam/PycharmProjects/virtualLink/images/current_screen.png")
-        shutil.copyfile("/home/noam/PycharmProjects/virtualLink/images/bad_image.png",
+        shutil.copyfile("/home/noam/PycharmProjects/virtualLink/images/pre_screen.png",
                         "/home/noam/PycharmProjects/virtualLink/images/current_screen.png")
 
     else:
@@ -402,9 +469,7 @@ def reset_pre_command():
 
 
 def get_screenshot(live_screen_socket, screen_label):
-    # while is_screen_live:
-    #     client_socket.send("screenshot 1".encode())
-    #     time.sleep(0.04)
+    # hint the client to sent new screenshot
     receive_screenshot(live_screen_socket)
     update_screen(screen_label)
 
@@ -413,9 +478,13 @@ def update_screen(screen_label):
     try:
         current_screen = ImageTk.PhotoImage(
             Image.open("./images/current_screen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
-    except (SyntaxError, PIL.UnidentifiedImageError):
-        current_screen = ImageTk.PhotoImage(
-            Image.open("./images/bad_image.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+    except (SyntaxError, PIL.UnidentifiedImageError, OSError):
+        try:
+            current_screen = ImageTk.PhotoImage(
+                Image.open("./images/pre_screen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+        except (SyntaxError, PIL.UnidentifiedImageError, OSError):
+            current_screen = ImageTk.PhotoImage(
+                Image.open("./images/bad_image.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
     screen_label.configure(image=current_screen)
     screen_label.image = current_screen
@@ -431,53 +500,52 @@ def stop_live_screen():
     is_screen_live = False
 
 
-def command_up(command):
+def command_up(ui):
     global current_command
     if current_command > -len(pre_commands):
         current_command -= 1
-        command.set(pre_commands[current_command])
+        ui.command.set(pre_commands[current_command])
     else:
         print("Can't go up anymore!")
 
     reset_pre_command()
 
 
-def command_down(command):
+def command_down(ui):
     global current_command
     if -1 > current_command:
         current_command += 1
-        command.set(pre_commands[current_command])
+        ui.command.set(pre_commands[current_command])
     else:
         print("Can't go down anymore!")
 
     reset_pre_command()
 
 
-def tab_complete(entry, command):
+def tab_complete(ui):
     global current_file_in_files_list, pre_command
 
     # save the current command only at the first time tab pressed
     if current_file_in_files_list == 0:
-        pre_command = command.get()
+        pre_command = ui.command.get()
 
     if current_file_in_files_list >= len(files_list):
         current_file_in_files_list = 0
 
     try:
         file_name = files_list[current_file_in_files_list].split(BREAK2)[1]
-        command.set(f"{pre_command} {file_name}")
+        ui.command.set(f"{pre_command} {file_name}")
         current_file_in_files_list += 1
-        entry.icursor(tk.END)
+        ui.command_entry.icursor(tk.END)
     except IndexError:
         pass
-    return "break"
 
 
-def send_button(client_socket, command_entry, msg_list, command):
+def send_button(client_socket, ui):
     global current_command, current_file_in_files_list
-    execute_command(client_socket, command_entry.get(), msg_list)
-    pre_commands.append(command.get())
-    command_entry.delete(0, tk.END)
+    execute_command(client_socket, ui)
+    pre_commands.append(ui.command.get())
+    ui.command_entry.delete(0, tk.END)
     current_command = 0
 
     # include in bind <Key>.
@@ -485,55 +553,90 @@ def send_button(client_socket, command_entry, msg_list, command):
     # current_file_in_files_list = 0
 
 
+def handle_ui_buttons(ui, client_socket):
+    while is_alive:
+        if ui.restart_flag:
+            restart(client_socket)
+            ui.restart_flag = False
+
+        elif ui.log_out_flag:
+            log_out(client_socket)
+            ui.log_out_flag = False
+
+        elif ui.shutdown_flag:
+            shutdown(client_socket)
+            ui.shutdown_flag = False
+
+        elif ui.execute_flag:
+            send_button(client_socket, ui)
+            ui.execute_flag = False
+
+        elif ui.browser_flag:
+            browse_files(ui.root, client_socket)
+            ui.browser_flag = False
+
+        elif ui.stop_live_screen_flag:
+            stop_live_screen()
+            ui.stop_live_screen_flag = False
+
+        elif ui.reset_pre_commands_flag:
+            reset_pre_command()
+            ui.reset_pre_commands_flag = False
+
+        elif ui.command_up_flag:
+            command_up(ui)
+            ui.command_up_flag = False
+
+        elif ui.command_down_flag:
+            command_down(ui)
+            ui.command_down_flag = False
+
+        elif ui.tab_complete_flag:
+            tab_complete(ui)
+            ui.tab_complete_flag = False
+
+        time.sleep(0.2)
+
+
+def receive(client_socket, ui):
+    global public_key, client_public_key
+    print("Start receiving")
+    while is_alive:
+        try:
+            msg_type, msg = get_resp(client_socket)
+
+            print(f"type(msg): {type(msg)}")
+            print(f"msg: {msg}")
+            if msg_type == "sys_info":
+                receive_sys_info(msg.decode(), ui.client_dist, ui.client_name_with_name, ui.client_name)
+
+            elif msg_type == "execute":
+                receive_execute(msg.decode(), ui.msg_list, ui.client_name)
+
+            elif msg_type == "file":
+                receive_file(msg.decode(), client_socket, ui.files)
+
+            elif msg_type == "files_list":
+                receive_files_list(msg.decode())
+
+            elif msg_type == "public_key":
+                client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
+                # print(f"\ntype(client_public_key): {type(client_public_key)}\nclient_public_key: {client_public_key}\n")  # NOQA
+
+            else:
+                print(f"Wrong message type! (message: {msg_type})")
+        except RuntimeError:
+            break
+        except OSError:
+            break
+
+
 def main():
-    global is_screen_live
+    global is_screen_live, is_alive
     root = tk.Tk()
     root.tk.call("source", "azure.tcl")
     root.tk.call("set_theme", "dark")
     root.title("Remote Control")
-    root.geometry("800x610")
-    tab_frame = ttk.Notebook()
-    tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
-    client_dist = tk.StringVar(value="Unknown")
-    client_name = tk.StringVar(value="Unknown")
-    client_name_with_name = tk.StringVar(value="Unknown")
-    command = tk.StringVar(value="Enter a command")
-    files = tk.StringVar()
-    mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
-
-    is_alive = True
-
-    def receive():
-        global public_key, client_public_key
-        print("Start receiving")
-        while is_alive:
-            try:
-                msg_type, msg = get_resp(client_socket)
-
-                print(f"type(msg): {type(msg)}")
-                print(f"msg: {msg}")
-                if msg_type == "sys_info":
-                    receive_sys_info(msg.decode(), client_dist, client_name_with_name, client_name)
-
-                elif msg_type == "execute":
-                    receive_execute(msg.decode(), msg_list, client_name)
-
-                elif msg_type == "file":
-                    receive_file(msg.decode(), client_socket, files)
-
-                elif msg_type == "files_list":
-                    receive_files_list(msg.decode())
-
-                elif msg_type == "public_key":
-                    client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
-                    # print(f"\ntype(client_public_key): {type(client_public_key)}\nclient_public_key: {client_public_key}\n")  # NOQA
-
-                else:
-                    print(f"Wrong message type! (message: {msg_type})")
-            except RuntimeError:
-                break
-            except OSError:
-                break
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((IP, PORT))
@@ -543,91 +646,14 @@ def main():
     client_socket, client_address = server_socket.accept()
     live_screen_socket, client_address = server_socket.accept()
 
-    tabs = {}
-    for tab in ("Remote Desktop", "File Transfer", "Command Prompt", "Power Management"):
-        tabs[tab] = tk.Frame(tab_frame)
-        tab_frame.add(tabs[tab], text=tab)
+    ui = UserInterface(root)
+    ui.set_client_address(client_address)
 
-        # Add elements to the "Remote Desktop" tab
-        if tab == "Remote Desktop":
-            label = tk.Label(tabs[tab], text="Remote desktop view:")
-            label.pack(side="top", fill="x", padx=10, pady=10)
-
-            # create the started chart var
-            start_screen = ImageTk.PhotoImage(
-                Image.open("./images/fullscreen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
-
-            screen_label = ttk.Label(tabs[tab], image=start_screen)
-            # keep reference to the chart, so it doesn't get prematurely garbage collected at the end of the function
-            screen_label.image = start_screen
-            screen_label.pack()
-
-            get_screenshot_button = ttk.Button(tabs[tab], text="stop", command=lambda: stop_live_screen())
-            get_screenshot_button.pack(pady=20, padx=20, fill="y")
-
-            # canvas = tk.Canvas(tabs[tab], width=400, height=300, bd=1)
-            # canvas.pack(side="top", fill="both", expand=True, padx=10, pady=10)
-
-        # Add elements to the "File Transfer" tab
-        elif tab == "File Transfer":
-            label = ttk.Label(tabs[tab], text="Select a file to transfer:")
-            label.pack(side="top", fill="x", padx=10, pady=10)
-            file_button = ttk.Button(tabs[tab], text="Browse...", command=lambda: browse_files(root, client_socket))
-            file_button.pack(side="top", fill="x", padx=10, pady=10)
-
-            files_label = ttk.Label(tabs[tab], textvariable=files)
-            files_label.pack(side="bottom", padx=10, pady=10, anchor="e")
-
-        # TODO: export output to file option
-        # TODO: support "long live" commands
-        # TODO: return errors
-        # Add elements to the "Command Prompt" tab
-        elif tab == "Command Prompt":
-            messages_frame = ttk.Frame(tabs[tab])
-            scrollbar = ttk.Scrollbar(messages_frame)
-            msg_list = tk.Listbox(messages_frame, yscrollcommand=scrollbar.set, width=100, height=25,
-                                  selectbackground="#333333", highlightthickness=0, activestyle="none",
-                                  font=mono_font)
-            scrollbar["command"] = msg_list.yview
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=15)
-            msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
-            messages_frame.pack()
-
-            # label = ttk.Label(tabs[tab], text="Enter a command:")
-            # label.pack(side="top", fill="x", padx=10, pady=10)  # NOQA
-            command_entry = ttk.Entry(tabs[tab], textvariable=command)
-            command_entry.bind("<Up>", lambda event: command_up(command))
-            command_entry.bind("<Down>", lambda event: command_down(command))
-            command_entry.bind("<Return>", lambda event: send_button(client_socket, command_entry, msg_list, command))
-            command_entry.bind("<Tab>", lambda event: tab_complete(command_entry, command))
-            command_entry.bind("<Key>", lambda event: reset_pre_command())
-            command_entry.pack(side="top", fill="x", padx=10)
-            execute_button = ttk.Button(tabs[tab], text="Execute",
-                                        command=lambda: send_button(client_socket, command_entry, msg_list, command))
-            execute_button.pack(side="top", fill="x", padx=10, pady=10)
-
-        # Add elements to the "Power Management" tab
-        elif tab == "Power Management":
-            shutdown_button = ttk.Button(tabs[tab], text="Shutdown", command=lambda: shutdown(client_socket))
-            shutdown_button.pack(side="top", fill="x", padx=10, pady=10)
-            restart_button = ttk.Button(tabs[tab], text="Restart", command=lambda: restart(client_socket))
-            restart_button.pack(side="top", fill="x", padx=10, pady=10)
-            logout_button = ttk.Button(tabs[tab], text="Log Out", command=lambda: log_out(client_socket))
-            logout_button.pack(side="top", fill="x", padx=10, pady=10)
-
-            ip_label = ttk.Label(tabs[tab], text=f"ip address: {client_address}")
-            ip_label.pack(side="bottom", padx=10, pady=5)
-            dist_label = ttk.Label(tabs[tab], textvariable=client_dist)
-            dist_label.pack(side="bottom", padx=10, pady=5)
-            name_label = ttk.Label(tabs[tab], textvariable=client_name_with_name)
-            name_label.pack(side="bottom", padx=10, pady=5)
-            panel_label = ttk.Label(tabs[tab], text="system information:")
-            panel_label.pack(side="bottom", padx=10, pady=10)
-
-    receive_thread = Thread(target=receive)
+    receive_thread = Thread(target=lambda: receive(client_socket, ui))
     receive_thread.start()
-    client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, screen_label))
-    is_screen_live = True
+    ui_buttons_thread = Thread(target=lambda: handle_ui_buttons(ui, client_socket))
+    ui_buttons_thread.start()
+    client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, ui.screen_label))
     client_live_screen.start()
 
     while True:

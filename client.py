@@ -118,8 +118,7 @@ def send_screenshot(live_screen_socket, path):
 
 
 def handle_screenshot(live_screen_socket):
-    # path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
-    path = "./images/screen.png"
+    path = "/home/noam/PycharmProjects/virtualLink/images/screen.png"
     take_screenshot(path)
     # send_response(live_screen_socket, "screenshot", "start")
     send_screenshot(live_screen_socket, path)

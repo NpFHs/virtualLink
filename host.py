@@ -31,7 +31,7 @@ is_screen_live = False
 
 
 class UserInterface(ttk.Frame):
-    def __init__(self, root):
+    def __init__(self, root, client_socket, client_address):
         ttk.Frame.__init__(self)
 
         root.geometry("800x610")
@@ -59,7 +59,7 @@ class UserInterface(ttk.Frame):
                     Image.open("./images/fullscreen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
                 screen_label = ttk.Label(tabs[tab], image=start_screen)
-                # keep reference to the chart, so it doesn't get prematurely garbage collected at the end of the function
+                # keep reference to the chart so it doesn't get prematurely garbage collected at the end of the function
                 screen_label.image = start_screen
                 screen_label.pack()
 

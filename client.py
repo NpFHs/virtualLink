@@ -12,6 +12,8 @@ SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
 public_key, private_key = rsa.newkeys(2048)
 host_public_key = None
+COMPRESSED_SCREENSHOT_WIDTH = 750
+
 if SYSTEM_TYPE == "Windows":
     screenshot_path = r"C:\images\screen.png"
     compressed_screenshot_path = r"C:\images\screen.png"
@@ -160,6 +162,9 @@ def send_screenshot(live_screen_socket, path):
                 data = img.read(BUFFER_SIZE)
                 if len(data) == 0:
                     print("screenshot sent!")
+                    # send the "screenshot done" msg.
+                    send_response(live_screen_socket, "screenshot", "done")
+
                     break
                 send_response(live_screen_socket, "screenshot_part", data)
             else:
@@ -169,7 +174,7 @@ def send_screenshot(live_screen_socket, path):
 
 def handle_screenshot(live_screen_socket):
     take_screenshot(screenshot_path)
-    compress_img(screenshot_path, new_size_ratio=0.5, quality=50)
+    compress_img(screenshot_path, quality=50, width=COMPRESSED_SCREENSHOT_WIDTH)
     send_screenshot(live_screen_socket, compressed_screenshot_path)
     return "screenshot", "done"
 
@@ -284,8 +289,8 @@ def keep_sending_screenshots(live_screen_socket):
     while True:
         # wait until the host get the screenshot
         msg_type, msg = handle_screenshot(live_screen_socket)
-        # send the "screenshot done" msg.
-        send_response(live_screen_socket, msg_type, msg)
+        # # send the "screenshot done" msg.
+        # send_response(live_screen_socket, msg_type, msg)
 
 
 def main():

@@ -27,6 +27,7 @@ pre_command = ""  # save the original command for tab_complete()\
 is_files_list_change = False  # mark when get new files list
 is_screen_live = True
 is_alive = True
+screenshot_wait_time = 0.05  # the time between the recv of the length data and the recv of the img.
 
 
 # TODO: add multiple clients support. update: maybe not...
@@ -44,6 +45,7 @@ class UserInterface(ttk.Frame):
         self.client_name_with_name = tk.StringVar(value="Unknown")
         self.command = tk.StringVar(value="Enter a command")
         self.files = tk.StringVar()
+        self.screenparts_delay = tk.DoubleVar(value=0.05)
         self.mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
 
         self.client_address = "unknown"
@@ -55,6 +57,7 @@ class UserInterface(ttk.Frame):
         self.execute_flag = False
         self.browser_flag = False
         self.stop_live_screen_flag = False
+        self.start_live_screen_flag = False
         self.reset_pre_commands_flag = False
         self.command_up_flag = False
         self.command_down_flag = False
@@ -67,21 +70,30 @@ class UserInterface(ttk.Frame):
 
             # Add elements to the "Remote Desktop" tab
             if tab == "Remote Desktop":
-                label = tk.Label(self.tabs[tab], text="Remote desktop view:")
-                label.pack(side="top", fill="x", padx=10, pady=10)
+                # label = tk.Label(self.tabs[tab], text="Remote desktop view:")
+                # label.grid(side="top", fill="x", padx=10, pady=10)
 
                 # create the started chart var
                 start_screen = ImageTk.PhotoImage(
-                    Image.open("./images/fullscreen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+                    Image.open("./images/fullscreen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
                 self.screen_label = ttk.Label(self.tabs[tab], image=start_screen)
                 # keep reference to the img, so it doesn't get prematurely garbage collected at the end of the function
                 self.screen_label.image = start_screen
-                self.screen_label.pack()
+                self.screen_label.grid(row=0, column=0, columnspan=3, sticky="nesw")
 
-                self.get_screenshot_button = ttk.Button(self.tabs[tab], text="stop",
-                                                        command=lambda: self.stop_live_screen())
-                self.get_screenshot_button.pack(pady=20, padx=20, fill="y")
+                self.start_live_button = ttk.Button(self.tabs[tab], text="start",
+                                                    command=lambda: self.start_live_screen())
+                self.start_live_button.grid(row=1, column=0, sticky="nesw", pady=20, padx=20)
+
+                # Scale
+                self.scale = ttk.Scale(self.tabs[tab], from_=0.00001, to=0.5, variable=self.screenparts_delay,
+                                       command=lambda event: self.screenparts_delay.set(self.scale.get()))
+                self.scale.grid(row=1, column=1, padx=(20, 10), pady=(20, 0), sticky="ew")
+
+                self.stop_live_button = ttk.Button(self.tabs[tab], text="stop",
+                                                   command=lambda: self.stop_live_screen())
+                self.stop_live_button.grid(row=1, column=2, sticky="nesw", pady=20, padx=20)
 
                 # canvas = tk.Canvas(tabs[tab], width=400, height=300, bd=1)
                 # canvas.pack(side="top", fill="both", expand=True, padx=10, pady=10)
@@ -161,6 +173,9 @@ class UserInterface(ttk.Frame):
 
     def stop_live_screen(self):
         self.stop_live_screen_flag = True
+
+    def start_live_screen(self):
+        self.start_live_screen_flag = True
 
     def reset_pre_command(self):
         self.reset_pre_commands_flag = True
@@ -415,18 +430,18 @@ def receive_files_list(msg):
     print(f"is_files_list_change: {is_files_list_change}")
 
 
-def receive_screenshot(live_screen_socket, msg="start"):
+def receive_screenshot(live_screen_socket, ui, msg="start"):
     if msg == "start":
         # # somehow "wb" mode append instead of re-write the file.
-        # open("/home/noam/PycharmProjects/virtualLink/images/current_screen.png", "w").close()
-        with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.png", "wb") as current_screen:
+        # open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "w").close()
+        with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "wb") as current_screen:
 
             live_screen_socket.send("1".encode())
             while True:
                 data_len = live_screen_socket.recv(8)
                 # print(f"data_len: {data_len}")
                 if data_len.isdigit():
-                    time.sleep(0.05)
+                    time.sleep(ui.screenparts_delay.get())
                     data = live_screen_socket.recv(int(data_len))
                     # print(f"len(data): {len(data)}")
                     # temp; without this lines something goes wrong (the program don't receive the hole screenshot part)
@@ -434,10 +449,11 @@ def receive_screenshot(live_screen_socket, msg="start"):
                         # print(f"{len(data)}:{int(data_len)}")
                         pass
                     if data == b"screenshot done":
+                        print(data)
                         print("pre screen updated.")
 
                         # save the current screen for case of broken one in the next time
-                        shutil.copyfile("./images/current_screen.png", "./images/pre_screen.png")
+                        shutil.copyfile("./images/current_screen.jpg", "./images/pre_screen.jpg")
                         return None
                     current_screen.write(data)
                     live_screen_socket.send("1".encode())
@@ -453,11 +469,10 @@ def receive_screenshot(live_screen_socket, msg="start"):
                     # raise "LengthError"
                     break
 
-
         # remove broken file
-        os.remove("/home/noam/PycharmProjects/virtualLink/images/current_screen.png")
-        shutil.copyfile("/home/noam/PycharmProjects/virtualLink/images/pre_screen.png",
-                        "/home/noam/PycharmProjects/virtualLink/images/current_screen.png")
+        os.remove("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg")
+        shutil.copyfile("/home/noam/PycharmProjects/virtualLink/images/pre_screen.jpg",
+                        "/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg")
 
     else:
         print("screenshot format not valid!")
@@ -468,36 +483,44 @@ def reset_pre_command():
     current_file_in_files_list = 0
 
 
-def get_screenshot(live_screen_socket, screen_label):
+def get_screenshot(live_screen_socket, ui):
     # hint the client to sent new screenshot
-    receive_screenshot(live_screen_socket)
-    update_screen(screen_label)
+    receive_screenshot(live_screen_socket, ui)
+    update_screen(ui.screen_label)
 
 
 def update_screen(screen_label):
     try:
         current_screen = ImageTk.PhotoImage(
-            Image.open("./images/current_screen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+            Image.open("./images/current_screen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
     except (SyntaxError, PIL.UnidentifiedImageError, OSError):
         try:
             current_screen = ImageTk.PhotoImage(
-                Image.open("./images/pre_screen.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+                Image.open("./images/pre_screen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
         except (SyntaxError, PIL.UnidentifiedImageError, OSError):
             current_screen = ImageTk.PhotoImage(
-                Image.open("./images/bad_image.png").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+                Image.open("./images/bad_image.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
     screen_label.configure(image=current_screen)
     screen_label.image = current_screen
 
 
-def keep_client_screen_alive(live_screen_socket, screen_label):
-    while is_screen_live:
-        get_screenshot(live_screen_socket, screen_label)
+def keep_client_screen_alive(live_screen_socket, ui):
+    while True:
+        while is_screen_live:
+            get_screenshot(live_screen_socket, ui)
+        time.sleep(0.5)
 
 
 def stop_live_screen():
     global is_screen_live
     is_screen_live = False
+
+
+def start_live_screen():
+    global is_screen_live
+    is_screen_live = True
+    print(is_screen_live)
 
 
 def command_up(ui):
@@ -579,6 +602,10 @@ def handle_ui_buttons(ui, client_socket):
             stop_live_screen()
             ui.stop_live_screen_flag = False
 
+        elif ui.start_live_screen_flag:
+            start_live_screen()
+            ui.start_live_screen_flag = False
+
         elif ui.reset_pre_commands_flag:
             reset_pre_command()
             ui.reset_pre_commands_flag = False
@@ -653,7 +680,7 @@ def main():
     receive_thread.start()
     ui_buttons_thread = Thread(target=lambda: handle_ui_buttons(ui, client_socket))
     ui_buttons_thread.start()
-    client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, ui.screen_label))
+    client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, ui))
     client_live_screen.start()
 
     while True:

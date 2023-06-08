@@ -13,6 +13,7 @@ SYSTEM_NAME = os.popen("whoami").read().strip("\n")
 public_key, private_key = rsa.newkeys(2048)
 host_public_key = None
 COMPRESSED_SCREENSHOT_WIDTH = 750
+is_alive = True
 
 if SYSTEM_TYPE == "Windows":
     screenshot_path = r"C:\images\screen.png"
@@ -174,7 +175,7 @@ def send_screenshot(live_screen_socket, path):
 
 def handle_screenshot(live_screen_socket):
     take_screenshot(screenshot_path)
-    compress_img(screenshot_path, quality=50, width=COMPRESSED_SCREENSHOT_WIDTH)
+    compress_img(screenshot_path, quality=50, width=COMPRESSED_SCREENSHOT_WIDTH, new_size_ratio=0.3)
     send_screenshot(live_screen_socket, compressed_screenshot_path)
     return "screenshot", "done"
 
@@ -286,7 +287,7 @@ def send_public_key(client_socket):
 
 
 def keep_sending_screenshots(live_screen_socket):
-    while True:
+    while is_alive:
         # wait until the host get the screenshot
         msg_type, msg = handle_screenshot(live_screen_socket)
         # # send the "screenshot done" msg.
@@ -294,6 +295,8 @@ def keep_sending_screenshots(live_screen_socket):
 
 
 def main():
+    global is_alive
+
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((IP, PORT))
     print("Client connected")
@@ -320,6 +323,7 @@ def main():
             cmd = "Wrong format"
         send_response(client_socket, cmd_type, cmd)
 
+    is_alive = False
     client_socket.close()
 
 

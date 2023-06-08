@@ -26,7 +26,7 @@ current_file_in_files_list = 0  # indicate the current file location for tab_com
 pre_command = ""  # save the original command for tab_complete()\
 is_files_list_change = False  # mark when get new files list
 is_screen_live = True
-is_alive = True
+is_alive = True  # keep all threads alive
 screenshot_wait_time = 0.05  # the time between the recv of the length data and the recv of the img.
 
 
@@ -39,7 +39,7 @@ class UserInterface(ttk.Frame):
 
         root.geometry("800x610")
         self.tab_frame = ttk.Notebook()
-        self.tab_frame.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+        self.tab_frame.pack(padx=5, pady=5, fill="both", expand=True)
         self.client_dist = tk.StringVar(value="Unknown")
         self.client_name = tk.StringVar(value="Unknown")
         self.client_name_with_name = tk.StringVar(value="Unknown")
@@ -74,25 +74,24 @@ class UserInterface(ttk.Frame):
                 # label.grid(side="top", fill="x", padx=10, pady=10)
 
                 # create the started chart var
-                start_screen = ImageTk.PhotoImage(
+                self.start_screen = ImageTk.PhotoImage(
                     Image.open("./images/fullscreen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
-                self.screen_label = ttk.Label(self.tabs[tab], image=start_screen)
+                self.screen_label = ttk.Label(self.tabs[tab], image=self.start_screen)
                 # keep reference to the img, so it doesn't get prematurely garbage collected at the end of the function
-                self.screen_label.image = start_screen
-                self.screen_label.grid(row=0, column=0, columnspan=3, sticky="nesw")
+                self.screen_label.image = self.start_screen
+                self.screen_label.grid(row=0, column=0, columnspan=3, pady=20, padx=15)
 
                 self.start_live_button = ttk.Button(self.tabs[tab], text="start",
                                                     command=lambda: self.start_live_screen())
-                self.start_live_button.grid(row=1, column=0, sticky="nesw", pady=20, padx=20)
+                self.start_live_button.grid(row=1, column=0, sticky="nesw", pady=20, padx=20, )
 
                 # Scale
                 self.scale = ttk.Scale(self.tabs[tab], from_=0.00001, to=0.5, variable=self.screenparts_delay,
                                        command=lambda event: self.screenparts_delay.set(self.scale.get()))
-                self.scale.grid(row=1, column=1, padx=(20, 10), pady=(20, 0), sticky="ew")
+                self.scale.grid(row=1, column=1, padx=(20, 10), pady=(20, 20), sticky="ew")
 
-                self.stop_live_button = ttk.Button(self.tabs[tab], text="stop",
-                                                   command=lambda: self.stop_live_screen())
+                self.stop_live_button = ttk.Button(self.tabs[tab], text="stop", command=lambda: self.stop_live_screen())
                 self.stop_live_button.grid(row=1, column=2, sticky="nesw", pady=20, padx=20)
 
                 # canvas = tk.Canvas(tabs[tab], width=400, height=300, bd=1)
@@ -126,9 +125,9 @@ class UserInterface(ttk.Frame):
 
                 self.messages_frame = ttk.Frame(self.tabs[tab])
                 self.scrollbar = ttk.Scrollbar(self.messages_frame)
-                self.msg_list = tk.Listbox(self.messages_frame, yscrollcommand=self.scrollbar.set, width=100, height=25,
-                                           selectbackground="#333333", highlightthickness=0, activestyle="none",
-                                           font=self.mono_font)
+                self.msg_list = tk.Listbox(self.messages_frame, yscrollcommand=self.scrollbar.set, width=500,
+                                           height=100, selectbackground="#333333", highlightthickness=0,
+                                           activestyle="none", font=self.mono_font)
                 self.scrollbar["command"] = self.msg_list.yview
                 self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=15)
                 self.msg_list.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
@@ -192,6 +191,69 @@ class UserInterface(ttk.Frame):
         return "break"
 
 
+class Browser(ttk.Frame):
+    def __init__(self, ui):
+        ttk.Frame.__init__(self)
+
+        self.file_location = tk.StringVar()
+        self.current_path = tk.StringVar(value="/...")
+
+        self.get_file_flag = False
+        self.open_folder_flag = False
+        self.go_back_flag = False
+
+        self.top = tk.Toplevel(ui)
+        self.top.title("File browser")
+        self.top.geometry("350x500")
+        # the button and the entry before the browser, so when the user change the window size they will always be visible.
+        self.get_file_button = ttk.Button(self.top, text="Get file",
+                                          command=lambda: self.get_file())
+        self.get_file_button.pack(side="bottom", fill="x", padx=10, pady=10)
+
+        self.location_entry = ttk.Entry(self.top, textvariable=self.file_location)
+        self.location_entry.bind("<Return>", lambda event: self.get_file())
+        self.location_entry.pack(side="bottom", fill="x", padx=10, pady=5)
+
+        self._columns = ("type", "name", "size")
+        self.file_browser = ttk.Treeview(self.top, columns=self._columns)  # create the files browser
+        self.file_browser["show"] = "headings"  # to avoid empty column in the beginning
+        self.file_browser.heading("type", text="type")
+        self.file_browser.column("type", width=40)
+        self.file_browser.heading("name", text="name")
+        self.file_browser.column("name", width=160)
+        self.file_browser.heading("size", text="size")
+        self.file_browser.column("size", width=80)
+        self.file_browser.bind("<Double-Button-1>", lambda: self.open_folder())
+        self.file_browser.bind("<Return>", lambda event: self.open_folder())
+
+        self.file_browser.pack(side="bottom", padx=10, pady=10, fill="both", expand=True)
+
+        self.path_combobox = ttk.Combobox(self.top, textvariable=self.current_path)
+        self.path_combobox.pack(side="right", anchor="ne", fill="x", expand=True, padx=10, pady=(10, 0))
+        self.separator = ttk.Separator(self.top, orient="vertical")
+        self.separator.pack(side="right", fill="y", pady=(14, 4))
+        self.back_button = ttk.Button(self.top, text="<", width=1,
+                                      command=lambda: self.browser_go_back())
+        self.back_button.pack(side="right", anchor="nw", padx=10, pady=(10, 0))
+        #
+        # request_files_in_location(client_socket, current_directory)
+        # time.sleep(0.5)  # wait until the files list update TODO: it's ABSOLUTELY WRONG way to do it
+        # self.file_browser.delete(*file_browser.get_children())
+        #
+        # for file in files_list:
+        #     tuple_file = file.split(BREAK2)  # split the file string to the browser columns
+        #     self.file_browser.insert("", tk.END, values=tuple_file)
+
+    def get_file(self):
+        self.get_file_flag = True
+
+    def open_folder(self):
+        self.open_folder_flag = True
+
+    def browser_go_back(self):
+        self.go_back_flag = True
+
+
 def encrypt(msg):
     try:
         enc_msg = rsa.encrypt(msg.encode(), client_public_key)  # NOQA
@@ -236,7 +298,7 @@ def get_resp(client_socket):
     msg_len = client_socket.recv(8)
     if msg_len.isdigit():
         enc_resp = client_socket.recv(int(msg_len))
-        print(f"enc_resp: {enc_resp}")
+        # print(f"enc_resp: {enc_resp}")
 
         resp = enc_resp
     else:
@@ -297,7 +359,7 @@ def open_folder(browser, client_socket, file_location):
             request_files_in_location(current_directory, client_socket)
             # time.sleep(0.5)  # wait to the files list to update
             while not is_files_list_change:  # wait to the files list to change
-                print(f"is_files_list_change: {is_files_list_change}")
+                # print(f"is_files_list_change: {is_files_list_change}")
                 continue
             if "".join(files_list) == "PermissionError":
                 current_directory = browser_previous_directory
@@ -328,9 +390,9 @@ def browser_go_back(browser, client_socket):
             browser.insert("", tk.END, values=tuple_file)
 
 
-def browse_files(win, client_socket):
+def browse_files(ui, client_socket):
     file_location = tk.StringVar()
-    top = tk.Toplevel(win)
+    top = tk.Toplevel(ui)
     top.title("File browser")
     top.geometry("350x500")
     current_path = tk.StringVar(value="/...")
@@ -449,8 +511,8 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                         # print(f"{len(data)}:{int(data_len)}")
                         pass
                     if data == b"screenshot done":
-                        print(data)
-                        print("pre screen updated.")
+                        # print(data)
+                        # print("pre screen updated.")
 
                         # save the current screen for case of broken one in the next time
                         shutil.copyfile("./images/current_screen.jpg", "./images/pre_screen.jpg")
@@ -463,7 +525,7 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                     # print(f"data_len: {data_len}")
                     # clean garbage
                     trash = live_screen_socket.recv(16777216)
-                    print(f"len(trash): {len(trash)}")
+                    # print(f"len(trash): {len(trash)}")
                     # tell the client to re-send the image
                     live_screen_socket.send("2".encode())
                     # raise "LengthError"
@@ -506,7 +568,7 @@ def update_screen(screen_label):
 
 
 def keep_client_screen_alive(live_screen_socket, ui):
-    while True:
+    while is_alive:
         while is_screen_live:
             get_screenshot(live_screen_socket, ui)
         time.sleep(0.5)
@@ -520,7 +582,7 @@ def stop_live_screen():
 def start_live_screen():
     global is_screen_live
     is_screen_live = True
-    print(is_screen_live)
+    # print(is_screen_live)
 
 
 def command_up(ui):
@@ -595,7 +657,7 @@ def handle_ui_buttons(ui, client_socket):
             ui.execute_flag = False
 
         elif ui.browser_flag:
-            browse_files(ui.root, client_socket)
+            browse_files(ui, client_socket)
             ui.browser_flag = False
 
         elif ui.stop_live_screen_flag:
@@ -632,8 +694,8 @@ def receive(client_socket, ui):
         try:
             msg_type, msg = get_resp(client_socket)
 
-            print(f"type(msg): {type(msg)}")
-            print(f"msg: {msg}")
+            # print(f"type(msg): {type(msg)}")
+            # print(f"msg: {msg}")
             if msg_type == "sys_info":
                 receive_sys_info(msg.decode(), ui.client_dist, ui.client_name_with_name, ui.client_name)
 

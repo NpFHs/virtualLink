@@ -87,7 +87,7 @@ class UserInterface(ttk.Frame):
                 self.start_live_button.grid(row=1, column=0, sticky="nesw", pady=20, padx=20, )
 
                 # Scale
-                self.scale = ttk.Scale(self.tabs[tab], from_=0.00001, to=0.5, variable=self.screenparts_delay,
+                self.scale = ttk.Scale(self.tabs[tab], from_=-5, to=0, variable=self.screenparts_delay,
                                        command=lambda event: self.screenparts_delay.set(self.scale.get()))
                 self.scale.grid(row=1, column=1, padx=(20, 10), pady=(20, 20), sticky="ew")
 
@@ -205,9 +205,8 @@ class Browser(ttk.Frame):
         self.top = tk.Toplevel(ui)
         self.top.title("File browser")
         self.top.geometry("350x500")
-        # the button and the entry before the browser, so when the user change the window size they will always be visible.
-        self.get_file_button = ttk.Button(self.top, text="Get file",
-                                          command=lambda: self.get_file())
+        # the button and the entry before the browser, so they be always visible.
+        self.get_file_button = ttk.Button(self.top, text="Get file", command=lambda: self.get_file())
         self.get_file_button.pack(side="bottom", fill="x", padx=10, pady=10)
 
         self.location_entry = ttk.Entry(self.top, textvariable=self.file_location)
@@ -223,7 +222,7 @@ class Browser(ttk.Frame):
         self.file_browser.column("name", width=160)
         self.file_browser.heading("size", text="size")
         self.file_browser.column("size", width=80)
-        self.file_browser.bind("<Double-Button-1>", lambda: self.open_folder())
+        self.file_browser.bind("<Double-Button-1>", lambda event: self.open_folder())
         self.file_browser.bind("<Return>", lambda event: self.open_folder())
 
         self.file_browser.pack(side="bottom", padx=10, pady=10, fill="both", expand=True)
@@ -344,33 +343,38 @@ def request_files_in_location(client_socket, location="CURRENT"):
     client_socket.send(encrypt(f"files_list {location}"))
 
 
-def open_folder(browser, client_socket, file_location):
+def open_folder(browser, client_socket):
     global current_directory
     global is_files_list_change
 
     try:
-        file_iid = browser.selection()[0]  # get the iid of the selected file. E.g: file_idd: 'I006'.
-        file_values = browser.item(file_iid)["values"]
+        file_iid = browser.file_browser.selection()[0]  # get the iid of the selected file. E.g: file_idd: 'I006'.
+        file_values = browser.file_browser.item(file_iid)["values"]
         file_type = file_values[0]
         file_name = file_values[1]
         if file_type == "DIR":
             browser_previous_directory = current_directory
             current_directory = f"{current_directory}{file_name}/"
-            request_files_in_location(current_directory, client_socket)
-            # time.sleep(0.5)  # wait to the files list to update
-            while not is_files_list_change:  # wait to the files list to change
-                # print(f"is_files_list_change: {is_files_list_change}")
-                continue
+            print(f"before: {is_files_list_change}")
+            is_files_list_change = False
+            request_files_in_location(client_socket, current_directory)
+            # wait to the files list to change
+            while True:
+                if is_files_list_change:
+                    break
+                time.sleep(0.5)
+            print(f"after: {is_files_list_change}")
+            is_files_list_change = False
             if "".join(files_list) == "PermissionError":
                 current_directory = browser_previous_directory
             else:
-                browser.delete(*browser.get_children())  # clear the browser
+                browser.file_browser.delete(*browser.file_browser.get_children())  # clear the browser
                 for file in files_list:
                     tuple_file = file.split(BREAK2)  # split the file string to the browser columns
-                    browser.insert("", tk.END, values=tuple_file)
+                    browser.file_browser.insert("", tk.END, values=tuple_file)
             is_files_list_change = False
         elif file_type == "FILE":
-            file_location.set(current_directory + file_name)
+            browser.file_location.set(current_directory + file_name)
         else:
             print("The file is not a directory of readable file!")
     except IndexError:
@@ -384,57 +388,30 @@ def browser_go_back(browser, client_socket):
         current_directory = "/".join(current_directory.split("/")[:-2]) + "/"  # update cwd
         request_files_in_location(client_socket, current_directory)
         time.sleep(0.5)  # wait until the files list update
-        browser.delete(*browser.get_children())
+        browser.file_browser.delete(*browser.file_browser.get_children())
         for file in files_list:
             tuple_file = file.split(BREAK2)  # split the file string to the browser columns
-            browser.insert("", tk.END, values=tuple_file)
+            browser.file_browser.insert("", tk.END, values=tuple_file)
 
 
 def browse_files(ui, client_socket):
-    file_location = tk.StringVar()
-    top = tk.Toplevel(ui)
-    top.title("File browser")
-    top.geometry("350x500")
-    current_path = tk.StringVar(value="/...")
-    # the button and the entry before the browser, so when the user change the window size they will always be visible.
-    get_file = ttk.Button(top, text="Get file",
-                          command=lambda: [request_file(file_location.get(), client_socket),
-                                           location_entry.delete(0, tk.END)])
-    get_file.pack(side="bottom", fill="x", padx=10, pady=10)
-
-    location_entry = ttk.Entry(top, textvariable=file_location)
-    location_entry.bind("<Return>", lambda event: [request_file(file_location.get(), client_socket),
-                                                   location_entry.delete(0, tk.END)])
-    location_entry.pack(side="bottom", fill="x", padx=10, pady=5)
-
-    columns = ("type", "name", "size")
-    file_browser = ttk.Treeview(top, columns=columns)  # create the files browser
-    file_browser["show"] = "headings"  # to avoid empty column in the beginning
-    file_browser.heading("type", text="type")
-    file_browser.column("type", width=40)
-    file_browser.heading("name", text="name")
-    file_browser.column("name", width=160)
-    file_browser.heading("size", text="size")
-    file_browser.column("size", width=80)
-    file_browser.bind("<Double-Button-1>", lambda event: open_folder(file_browser, client_socket, file_location))
-    file_browser.bind("<Return>", lambda event: open_folder(file_browser, client_socket, file_location))
-
-    file_browser.pack(side="bottom", padx=10, pady=10, fill="both", expand=True)
-
-    path_combobox = ttk.Combobox(top, textvariable=current_path)
-    path_combobox.pack(side="right", anchor="ne", fill="x", expand=True, padx=10, pady=(10, 0))
-    separator = ttk.Separator(top, orient="vertical")
-    separator.pack(side="right", fill="y", pady=(14, 4))
-    back_button = ttk.Button(top, text="<", width=1, command=lambda: browser_go_back(file_browser, client_socket))
-    back_button.pack(side="right", anchor="nw", padx=10, pady=(10, 0))
-
+    global is_files_list_change
+    browser = Browser(ui)
+    browser_thread = Thread(target=lambda: handle_file_browser(browser, client_socket))
+    browser_thread.start()
     request_files_in_location(client_socket, current_directory)
-    time.sleep(0.5)  # wait until the files list update TODO: it's ABSOLUTELY WRONG way to do it
-    file_browser.delete(*file_browser.get_children())
+    # wait until the files list update
+    while True:
+        if is_files_list_change:
+            break
+        time.sleep(0.5)
+    is_files_list_change = False
+    # clear the files list
+    browser.file_browser.delete(*browser.file_browser.get_children())
 
     for file in files_list:
         tuple_file = file.split(BREAK2)  # split the file string to the browser columns
-        file_browser.insert("", tk.END, values=tuple_file)
+        browser.file_browser.insert("", tk.END, values=tuple_file)
 
 
 def receive_sys_info(msg, client_dist, client_name_with_name, client_name):
@@ -503,7 +480,10 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                 data_len = live_screen_socket.recv(8)
                 # print(f"data_len: {data_len}")
                 if data_len.isdigit():
-                    time.sleep(ui.screenparts_delay.get())
+                    # make the scale logarithmic
+                    delay_time = 10 ** ui.screenparts_delay.get()
+                    print(f"delay: {delay_time}")
+                    time.sleep(delay_time)
                     data = live_screen_socket.recv(int(data_len))
                     # print(f"len(data): {len(data)}")
                     # temp; without this lines something goes wrong (the program don't receive the hole screenshot part)
@@ -685,6 +665,24 @@ def handle_ui_buttons(ui, client_socket):
             ui.tab_complete_flag = False
 
         time.sleep(0.2)
+
+
+def handle_file_browser(browser, client_socket):
+    while browser.top.winfo_exists() and is_alive:
+        if browser.get_file_flag:
+            request_file(browser.file_location.get(), client_socket)
+            browser.location_entry.delete(0, tk.END)
+            browser.get_file_flag = False
+
+        elif browser.open_folder_flag:
+            open_folder(browser, client_socket)
+            browser.open_folder_flag = False
+
+        elif browser.go_back_flag:
+            browser_go_back(browser, client_socket)
+            browser.go_back_flag = False
+
+        time.sleep(0.5)
 
 
 def receive(client_socket, ui):

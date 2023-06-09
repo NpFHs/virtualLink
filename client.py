@@ -158,7 +158,10 @@ def take_screenshot(path):
 def send_screenshot(live_screen_socket, path):
     with open(path, "rb") as img:
         while True:
+            print("waiting to send next screenshot part")
             status_code = live_screen_socket.recv(1024).decode()
+            print("next screenshot part sent ;)")
+
             if status_code == "1":
                 data = img.read(BUFFER_SIZE)
                 if len(data) == 0:

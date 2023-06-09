@@ -27,7 +27,6 @@ pre_command = ""  # save the original command for tab_complete()\
 is_files_list_change = False  # mark when get new files list
 is_screen_live = True
 is_alive = True  # keep all threads alive
-screenshot_wait_time = 0.05  # the time between the recv of the length data and the recv of the img.
 
 
 # TODO: add multiple clients support. update: maybe not...
@@ -45,7 +44,7 @@ class UserInterface(ttk.Frame):
         self.client_name_with_name = tk.StringVar(value="Unknown")
         self.command = tk.StringVar(value="Enter a command")
         self.files = tk.StringVar()
-        self.screenparts_delay = tk.DoubleVar(value=0.05)
+        self.screenparts_delay = tk.DoubleVar(value=0)
         self.mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
 
         self.client_address = "unknown"

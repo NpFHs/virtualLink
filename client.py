@@ -13,11 +13,12 @@ SYSTEM_NAME = os.popen("whoami").read().strip("\n")
 public_key, private_key = rsa.newkeys(2048)
 host_public_key = None
 COMPRESSED_SCREENSHOT_WIDTH = 750
+screenshot_quality = 50
 is_alive = True
 
 if SYSTEM_TYPE == "Windows":
-    screenshot_path = r"C:\images\screen.png"
-    compressed_screenshot_path = r"C:\images\screen.png"
+    screenshot_path = r"C:\images\screen.jpg"
+    compressed_screenshot_path = r"C:\images\screen.jpg"
 else:
     screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
     compressed_screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
@@ -156,13 +157,17 @@ def take_screenshot(path):
 
 
 def send_screenshot(live_screen_socket, path):
+    global screenshot_quality
+
     with open(path, "rb") as img:
         while True:
-            print("waiting to send next screenshot part")
             status_code = live_screen_socket.recv(1024).decode()
-            print("next screenshot part sent ;)")
 
-            if status_code == "1":
+            if status_code == "-1":
+                print(status_code + ", Error")
+                break
+            else:
+                screenshot_quality = int(status_code)
                 data = img.read(BUFFER_SIZE)
                 if len(data) == 0:
                     print("screenshot sent!")
@@ -171,14 +176,12 @@ def send_screenshot(live_screen_socket, path):
 
                     break
                 send_response(live_screen_socket, "screenshot_part", data)
-            else:
-                print(status_code + ", Error")
-                break
 
 
 def handle_screenshot(live_screen_socket):
     take_screenshot(screenshot_path)
-    compress_img(screenshot_path, quality=50, width=COMPRESSED_SCREENSHOT_WIDTH, new_size_ratio=0.3)
+    print(f"screenshot_quality: {screenshot_quality}")
+    compress_img(screenshot_path, quality=screenshot_quality, width=COMPRESSED_SCREENSHOT_WIDTH)
     send_screenshot(live_screen_socket, compressed_screenshot_path)
     return "screenshot", "done"
 

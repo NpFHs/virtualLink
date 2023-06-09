@@ -44,7 +44,7 @@ class UserInterface(ttk.Frame):
         self.client_name_with_name = tk.StringVar(value="Unknown")
         self.command = tk.StringVar(value="Enter a command")
         self.files = tk.StringVar()
-        self.screenparts_delay = tk.DoubleVar(value=0)
+        self.scale_var = tk.IntVar(value=50)
         self.mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
 
         self.client_address = "unknown"
@@ -86,8 +86,8 @@ class UserInterface(ttk.Frame):
                 self.start_live_button.grid(row=1, column=0, sticky="nesw", pady=20, padx=20, )
 
                 # Scale
-                self.scale = ttk.Scale(self.tabs[tab], from_=-5, to=0, variable=self.screenparts_delay,
-                                       command=lambda event: self.screenparts_delay.set(self.scale.get()))
+                self.scale = ttk.Scale(self.tabs[tab], from_=5, to=100, variable=self.scale_var,
+                                       command=lambda event: self.scale_var.set(self.scale.get()))
                 self.scale.grid(row=1, column=1, padx=(20, 10), pady=(20, 20), sticky="ew")
 
                 self.stop_live_button = ttk.Button(self.tabs[tab], text="stop", command=lambda: self.stop_live_screen())
@@ -361,7 +361,7 @@ def open_folder(browser, client_socket):
             while True:
                 if is_files_list_change:
                     break
-                time.sleep(0.5)
+                time.sleep(0.1)
             print(f"after: {is_files_list_change}")
             is_files_list_change = False
             if "".join(files_list) == "PermissionError":
@@ -381,12 +381,21 @@ def open_folder(browser, client_socket):
 
 
 def browser_go_back(browser, client_socket):
-    global current_directory
+    global current_directory, is_files_list_change
 
     if current_directory.count("/") > 1:
         current_directory = "/".join(current_directory.split("/")[:-2]) + "/"  # update cwd
         request_files_in_location(client_socket, current_directory)
-        time.sleep(0.5)  # wait until the files list update
+        is_files_list_change = False
+
+        # wait until the files list update
+        while True:
+            if is_files_list_change:
+                break
+            time.sleep(0.1)
+
+        is_files_list_change = False
+
         browser.file_browser.delete(*browser.file_browser.get_children())
         for file in files_list:
             tuple_file = file.split(BREAK2)  # split the file string to the browser columns
@@ -403,7 +412,7 @@ def browse_files(ui, client_socket):
     while True:
         if is_files_list_change:
             break
-        time.sleep(0.5)
+        time.sleep(0.1)
     is_files_list_change = False
     # clear the files list
     browser.file_browser.delete(*browser.file_browser.get_children())
@@ -444,16 +453,26 @@ def receive_file(msg, client_socket, files):
         with open(file_name, "wb") as file:
             while True:
                 msg_len = client_socket.recv(8)
+
                 if msg_len.isdigit():
                     bytes_file = client_socket.recv(int(msg_len))
+                    missing_data_length = int(msg_len) - len(bytes_file)
+                    while missing_data_length != 0:
+                        bytes_file += client_socket.recv(int(missing_data_length))
+                        missing_data_length = int(msg_len) - len(bytes_file)
+
                 else:
                     print("No length info!")
                     # clean possible garbage
-                    client_socket.recv(16777216)
+                    trash = client_socket.recv(1666777216)
+                    print(f"len(trash): {len(trash)}")
                     bytes_file = "Error".encode()
+                    os.remove(file_name)
+                    break
 
                 if bytes_file == "file done".encode():
                     break
+
                 file.write(bytes_file)
             files.set(f"{files.get()}\n{file_name}".strip("\n"))
 
@@ -474,21 +493,22 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
         # open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "w").close()
         with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "wb") as current_screen:
 
-            live_screen_socket.send("1".encode())
+            live_screen_socket.send(str(ui.scale_var.get()).encode())
             while True:
                 data_len = live_screen_socket.recv(8)
                 # print(f"data_len: {data_len}")
                 if data_len.isdigit():
                     # make the scale logarithmic
-                    delay_time = 10 ** ui.screenparts_delay.get()
-                    print(f"delay: {delay_time}")
-                    time.sleep(delay_time)
+                    # delay_time = 10 ** ui.screenparts_delay.get()
+                    # print(f"delay: {delay_time}")
+                    # time.sleep(delay_time)
                     data = live_screen_socket.recv(int(data_len))
                     # print(f"len(data): {len(data)}")
-                    # temp; without this lines something goes wrong (the program don't receive the hole screenshot part)
-                    if len(data) != int(data_len):
-                        # print(f"{len(data)}:{int(data_len)}")
-                        pass
+                    missing_data_len = int(data_len) - len(data)
+                    while missing_data_len != 0:
+                        data += live_screen_socket.recv(missing_data_len)
+                        missing_data_len = int(data_len) - len(data)
+
                     if data == b"screenshot done":
                         # print(data)
                         # print("pre screen updated.")
@@ -497,7 +517,7 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                         shutil.copyfile("./images/current_screen.jpg", "./images/pre_screen.jpg")
                         return None
                     current_screen.write(data)
-                    live_screen_socket.send("1".encode())
+                    live_screen_socket.send(str(ui.scale_var.get()).encode())
 
                 else:
                     print("wrong message format! (missing length data)")
@@ -506,7 +526,7 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                     trash = live_screen_socket.recv(16777216)
                     # print(f"len(trash): {len(trash)}")
                     # tell the client to re-send the image
-                    live_screen_socket.send("2".encode())
+                    live_screen_socket.send("-1".encode())
                     # raise "LengthError"
                     break
 
@@ -550,7 +570,7 @@ def keep_client_screen_alive(live_screen_socket, ui):
     while is_alive:
         while is_screen_live:
             get_screenshot(live_screen_socket, ui)
-        time.sleep(0.5)
+        time.sleep(0.1)
 
 
 def stop_live_screen():

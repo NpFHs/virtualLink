@@ -10,7 +10,7 @@ from PIL import Image
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
-public_key, private_key = rsa.newkeys(2048)
+public_key, private_key = rsa.newkeys(512)
 host_public_key = None
 COMPRESSED_SCREENSHOT_WIDTH = 750
 screenshot_quality = 50
@@ -19,6 +19,7 @@ is_alive = True
 if SYSTEM_TYPE == "Windows":
     screenshot_path = r"C:\images\screen.jpg"
     compressed_screenshot_path = r"C:\images\screen.jpg"
+    os.mkdir(r"C:\images")
 else:
     screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
     compressed_screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"

@@ -20,7 +20,7 @@ pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
 current_directory = "/"
 files_list = []
-public_key, private_key = rsa.newkeys(2048)
+public_key, private_key = rsa.newkeys(512)
 client_public_key = None
 current_file_in_files_list = 0  # indicate the current file location for tab_complete()
 pre_command = ""  # save the original command for tab_complete()\
@@ -30,6 +30,33 @@ is_alive = True  # keep all threads alive
 
 
 # TODO: add multiple clients support. update: maybe not...
+
+
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('192.255.255.255', 1))
+        local_ip = s.getsockname()[0]
+    # except:
+    #     local_ip = '127.0.0.1'
+    finally:
+        s.close()
+
+    return local_ip
+
+
+class WaitingWindow(ttk.Frame):
+    def __init__(self, root):
+        ttk.Frame.__init__(self)
+
+        root.geometry("400x200")
+        self.ip = tk.StringVar(value=f"ip: {get_local_ip()}")
+        self.port = tk.StringVar(value=f"port: {PORT}")
+        self.ip_label = ttk.Label(root, textvariable=self.ip, font=("", 24, "italic"))
+        self.ip_label.pack(pady=20)
+        self.port_label = ttk.Label(root, textvariable=self.port, font=("", 24, "italic"))
+        self.port_label.pack()
 
 
 class UserInterface(ttk.Frame):
@@ -87,7 +114,7 @@ class UserInterface(ttk.Frame):
 
                 # Scale
                 self.scale = ttk.Scale(self.tabs[tab], from_=5, to=100, variable=self.scale_var,
-                                       command=lambda event: self.scale_var.set(self.scale.get()))
+                                       command=lambda event: self.scale_var.set(int(self.scale.get())))
                 self.scale.grid(row=1, column=1, padx=(20, 10), pady=(20, 20), sticky="ew")
 
                 self.stop_live_button = ttk.Button(self.tabs[tab], text="stop", command=lambda: self.stop_live_screen())
@@ -737,8 +764,13 @@ def receive(client_socket, ui):
             break
 
 
+def wait_to_client(ww):
+    ww.mainloop()
+
+
 def main():
     global is_screen_live, is_alive
+
     root = tk.Tk()
     root.tk.call("source", "azure.tcl")
     root.tk.call("set_theme", "dark")
@@ -749,8 +781,18 @@ def main():
     server_socket.listen()
     print("Listening...")
 
+    root.withdraw()
+    wait_win = tk.Toplevel(root)
+    wait_win.title("Waiting")
+    ww = WaitingWindow(wait_win)
+
+    waiting_thread = Thread(target=lambda: wait_to_client(ww))
+    waiting_thread.start()
+
     client_socket, client_address = server_socket.accept()
     live_screen_socket, client_address = server_socket.accept()
+
+    ww.destroy()
 
     ui = UserInterface(root)
     ui.set_client_address(client_address)

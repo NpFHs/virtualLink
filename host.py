@@ -381,15 +381,15 @@ def open_folder(browser, client_socket):
         if file_type == "DIR":
             browser_previous_directory = current_directory
             current_directory = f"{current_directory}{file_name}/"
-            print(f"before: {is_files_list_change}")
             is_files_list_change = False
+
             request_files_in_location(client_socket, current_directory)
             # wait to the files list to change
             while True:
                 if is_files_list_change:
                     break
                 time.sleep(0.1)
-            print(f"after: {is_files_list_change}")
+
             is_files_list_change = False
             if "".join(files_list) == "PermissionError":
                 current_directory = browser_previous_directory
@@ -511,7 +511,6 @@ def receive_files_list(msg):
     files_list.clear()
     files_list.extend(files_in_directory)
     is_files_list_change = True
-    print(f"is_files_list_change: {is_files_list_change}")
 
 
 def receive_screenshot(live_screen_socket, ui, msg="start"):
@@ -521,7 +520,7 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
         with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "wb") as current_screen:
 
             live_screen_socket.send(str(ui.scale_var.get()).encode())
-            while True:
+            while True and is_alive:
                 data_len = live_screen_socket.recv(8)
                 # print(f"data_len: {data_len}")
                 if data_len.isdigit():
@@ -544,7 +543,10 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                         shutil.copyfile("./images/current_screen.jpg", "./images/pre_screen.jpg")
                         return None
                     current_screen.write(data)
-                    live_screen_socket.send(str(ui.scale_var.get()).encode())
+                    try:
+                        live_screen_socket.send(str(ui.scale_var.get()).encode())
+                    except RuntimeError:
+                        print("exit 550")
 
                 else:
                     print("wrong message format! (missing length data)")
@@ -574,13 +576,18 @@ def reset_pre_command():
 def get_screenshot(live_screen_socket, ui):
     # hint the client to sent new screenshot
     receive_screenshot(live_screen_socket, ui)
-    update_screen(ui.screen_label)
+
+    try:
+        update_screen(ui.screen_label)
+    except RuntimeError:
+        pass
 
 
 def update_screen(screen_label):
     try:
         current_screen = ImageTk.PhotoImage(
             Image.open("./images/current_screen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+        a = current_screen
     except (SyntaxError, PIL.UnidentifiedImageError, OSError):
         try:
             current_screen = ImageTk.PhotoImage(
@@ -591,7 +598,6 @@ def update_screen(screen_label):
 
     screen_label.configure(image=current_screen)
     screen_label.image = current_screen
-
 
 def keep_client_screen_alive(live_screen_socket, ui):
     while is_alive:
@@ -764,12 +770,8 @@ def receive(client_socket, ui):
             break
 
 
-def wait_to_client(ww):
-    ww.mainloop()
-
-
 def main():
-    global is_screen_live, is_alive
+    global is_screen_live, is_alive, PORT
 
     root = tk.Tk()
     root.tk.call("source", "azure.tcl")
@@ -777,22 +779,19 @@ def main():
     root.title("Remote Control")
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((IP, PORT))
+    try:
+        server_socket.bind((IP, PORT))
+    except OSError:
+        PORT = 8090
+        server_socket.bind((IP, PORT))
+
+    print(f"ip:\t\t{get_local_ip()}\nport:\t{PORT}\n")
+
     server_socket.listen()
     print("Listening...")
 
-    root.withdraw()
-    wait_win = tk.Toplevel(root)
-    wait_win.title("Waiting")
-    ww = WaitingWindow(wait_win)
-
-    waiting_thread = Thread(target=lambda: wait_to_client(ww))
-    waiting_thread.start()
-
     client_socket, client_address = server_socket.accept()
     live_screen_socket, client_address = server_socket.accept()
-
-    ww.destroy()
 
     ui = UserInterface(root)
     ui.set_client_address(client_address)
@@ -805,7 +804,7 @@ def main():
     client_live_screen.start()
 
     while True:
-        if client_public_key != None:
+        if client_public_key is not None:
             break
         time.sleep(0.1)
 
@@ -817,6 +816,7 @@ def main():
     client_socket.send(encrypt("exit 0"))
     is_alive = False
     is_screen_live = False
+    # time.sleep(10)
     server_socket.close()
     client_socket.close()
 

@@ -158,14 +158,16 @@ def take_screenshot(path):
 
 
 def send_screenshot(live_screen_socket, path):
-    global screenshot_quality
+    global screenshot_quality, is_alive
 
     with open(path, "rb") as img:
         while True:
             status_code = live_screen_socket.recv(1024).decode()
 
             if status_code == "-1":
-                print(status_code + ", Error")
+                break
+            elif status_code == "":
+                is_alive = False
                 break
             else:
                 screenshot_quality = int(status_code)
@@ -181,7 +183,7 @@ def send_screenshot(live_screen_socket, path):
 
 def handle_screenshot(live_screen_socket):
     take_screenshot(screenshot_path)
-    print(f"screenshot_quality: {screenshot_quality}")
+    # print(f"screenshot_quality: {screenshot_quality}")
     compress_img(screenshot_path, quality=screenshot_quality, width=COMPRESSED_SCREENSHOT_WIDTH)
     send_screenshot(live_screen_socket, compressed_screenshot_path)
     return "screenshot", "done"

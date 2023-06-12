@@ -24,7 +24,7 @@ Install the required dependencies:
 ```pip install -r requirements.txt```
 
 ### Usage  
-Start the server by running the host.py script:  
+* Start the server by running the host.py script:  
 ```python3 host.py```
 
 The server will display its IP address and port number.  
@@ -48,37 +48,37 @@ The IP address and port number used by the server can be configured in the host.
 * pyscreenshot library (can be installed via * pip install pyscreenshot)
 
 ### Getting Started
-Clone the VirtualLink repository to your local machine.
+1. Clone the VirtualLink repository to your local machine.
 
-Navigate to the client directory in the cloned repository:
+2. Navigate to the client directory in the cloned repository:
 
 ```cd virtualLink/client```
 
-Install the required dependencies:
+3. Install the required dependencies:
 ```pip install -r requirements.txt```
 ### Usage
 
 To use the VirtualLink client, follow these steps:
 
-Start the VirtualLink server on the target machine by following the instructions provided in the server documentation.
+1. Start the VirtualLink server on the host machine by following the instructions provided in the server documentation.
 
-Run the VirtualLink client script:
+2. Run the VirtualLink client script:
 
 ```python3 client.py```
 
-When prompted, enter the IP address and port of the VirtualLink server. Press Enter to use the default values (127.0.0.1 for the IP address and 8091 for the port).
+3. When prompted, enter the IP address and port of the VirtualLink server. Press Enter to use the default values (127.0.0.1 for the IP address and 8091 for the port).
 
-The client will establish a connection with the server and perform an initial handshake to exchange system information and public keys.
+4. The client will establish a connection with the server and perform an initial handshake to exchange system information and public keys.
 
 ### Customization
 
 You can customize the behavior of the VirtualLink client by modifying the variables and code in the client.py file. Some possible customizations include:
 
-Changing the default values for IP address and port.
+* Changing the default values for IP address and port.
 
-Modifying the power commands to suit your operating system.
+* Modifying the power commands to suit your operating system.
 
-Adjusting the buffer size and screenshot parameters for performance optimization.
+* Adjusting the buffer size and screenshot parameters for performance optimization.
 
 Make sure to test and validate any modifications to ensure proper functionality.
 
@@ -86,12 +86,12 @@ Make sure to test and validate any modifications to ensure proper functionality.
 
 If you encounter any issues or errors while using the VirtualLink client, consider the following troubleshooting steps:
 
-Verify that the VirtualLink server is running and accessible from the client machine.
+* Verify that the VirtualLink server is running and accessible from the client machine.
 
-Check the network connectivity between the client and server machines.
+* Check the network connectivity between the client and server machines.
 
-Ensure that the required dependencies (rsa and pyscreenshot) are installed correctly.
+* Ensure that the required dependencies (rsa and pyscreenshot) are installed correctly.
 
-Review the error messages and logs for any clues on the cause of the issue.
+* Review the error messages and logs for any clues on the cause of the issue.
 
 If the problem persists, feel free to seek help by opening an issue in the VirtualLink repository.

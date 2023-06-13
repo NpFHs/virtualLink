@@ -254,6 +254,7 @@ class Browser(ttk.Frame):
         self.file_browser.pack(side="bottom", padx=10, pady=10, fill="both", expand=True)
 
         self.path_combobox = ttk.Combobox(self.top, textvariable=self.current_path)
+        self.path_combobox.bind("<Return>", lambda event: self.open_folder())
         self.path_combobox.pack(side="right", anchor="ne", fill="x", expand=True, padx=10, pady=(10, 0))
         self.separator = ttk.Separator(self.top, orient="vertical")
         self.separator.pack(side="right", fill="y", pady=(14, 4))

@@ -93,7 +93,7 @@ def compress_img(image_name, new_size_ratio=0.9, quality=90, width=None, height=
     new_image_size = os.path.getsize(new_filename)
     # calculate the saving bytes
     saving_diff = new_image_size - image_size
-    print(f"[+] Image size change: {saving_diff / image_size * 100:.2f}% of the original image size.")
+    # print(f"[+] Image size change: {saving_diff / image_size * 100:.2f}% of the original image size.")
     return new_filename
 
 
@@ -142,7 +142,7 @@ def convert_file_size(size):
         converted_size = round(size / 1000000000, 2)
         return f"{converted_size} {unit}"
     else:
-        print(f"size: {size}")
+        # print(f"size: {size}")
         print(size // 1000000000000)
         unit = "TB"
         converted_size = round(size / 1000000000000, 2)
@@ -173,7 +173,7 @@ def send_screenshot(live_screen_socket, path):
                 screenshot_quality = int(status_code)
                 data = img.read(BUFFER_SIZE)
                 if len(data) == 0:
-                    print("screenshot sent!")
+                    # print("screenshot sent!")
                     # send the "screenshot done" msg.
                     send_response(live_screen_socket, "screenshot", "done")
 
@@ -262,7 +262,7 @@ def handle_server_response(command, client_socket, live_screen_socket):
                         sum_files = len(os.listdir(file_path))  # count the number of the files in the directory
                         files_list[counter] = files_list[counter] + BREAK2 + str(sum_files) + " Items"
                     except PermissionError:
-                        print("can't view this file")
+                        # print("can't view this file")
                         files_list[counter] = files_list[counter] + BREAK2 + "---"
 
                 else:
@@ -291,7 +291,7 @@ def send_basic_info(client_socket):
 
 
 def send_public_key(client_socket):
-    print(public_key.save_pkcs1(format="DER"))
+    # print(public_key.save_pkcs1(format="DER"))
     send_response(client_socket, "public_key", public_key.save_pkcs1(format="DER"))
 
 

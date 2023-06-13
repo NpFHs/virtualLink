@@ -38,25 +38,12 @@ def get_local_ip():
         # doesn't even have to be reachable
         s.connect(('192.255.255.255', 1))
         local_ip = s.getsockname()[0]
-    # except:
-    #     local_ip = '127.0.0.1'
+    except OSError:
+        local_ip = '127.0.0.1'
     finally:
         s.close()
 
     return local_ip
-
-
-class WaitingWindow(ttk.Frame):
-    def __init__(self, root):
-        ttk.Frame.__init__(self)
-
-        root.geometry("400x200")
-        self.ip = tk.StringVar(value=f"ip: {get_local_ip()}")
-        self.port = tk.StringVar(value=f"port: {PORT}")
-        self.ip_label = ttk.Label(root, textvariable=self.ip, font=("", 24, "italic"))
-        self.ip_label.pack(pady=20)
-        self.port_label = ttk.Label(root, textvariable=self.port, font=("", 24, "italic"))
-        self.port_label.pack()
 
 
 class UserInterface(ttk.Frame):
@@ -782,7 +769,7 @@ def main():
     try:
         server_socket.bind((IP, PORT))
     except OSError:
-        PORT = 8090
+        PORT += 1
         server_socket.bind((IP, PORT))
 
     print(f"ip:\t\t{get_local_ip()}\nport:\t{PORT}\n")

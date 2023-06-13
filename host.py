@@ -477,6 +477,7 @@ def receive_file(msg, client_socket, files):
 
                 else:
                     print("No length info!")
+                    print(f"msg_len")
                     # clean possible garbage
                     trash = client_socket.recv(1666777216)
                     print(f"len(trash): {len(trash)}")

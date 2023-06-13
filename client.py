@@ -1,7 +1,6 @@
 import socket
 import os
 import platform
-import time
 import rsa
 import pyscreenshot as ImageGrab
 from threading import *
@@ -19,7 +18,11 @@ is_alive = True
 if SYSTEM_TYPE == "Windows":
     screenshot_path = r"C:\images\screen.jpg"
     compressed_screenshot_path = r"C:\images\screen.jpg"
-    os.mkdir(r"C:\images")
+    try:
+        os.mkdir(r"C:\images")
+    except FileExistsError:
+        pass
+
 else:
     screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
     compressed_screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"

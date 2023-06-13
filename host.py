@@ -338,6 +338,7 @@ def get_resp(client_socket):
         msg_type = resp.split()[0].decode()
     except IndexError:
         msg_type = "Error"
+        print("can't split (341)")
     msg = b" ".join(resp.split(b" ")[1:])
 
     return msg_type, msg
@@ -749,7 +750,7 @@ def receive(client_socket, ui):
             msg_type, msg = get_resp(client_socket)
 
             # print(f"type(msg): {type(msg)}")
-            # print(f"msg: {msg}")
+            print(f"msg: {msg}")
             if msg_type == "sys_info":
                 receive_sys_info(msg.decode(), ui.client_dist, ui.client_name_with_name, ui.client_name)
 

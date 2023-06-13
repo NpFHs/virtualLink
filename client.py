@@ -28,15 +28,15 @@ else:
     compressed_screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
     # screenshot_path = "images/screen.png"
 
-try:
-    PORT = int(input("Please enter the host PORT (8091): "))
-except ValueError:
-    PORT = 8091
-
 IP = input("Please enter the host IP (127.0.0.1): ")
 
 if IP == "" or len(IP.split(".")) != 4:
     IP = "127.0.0.1"
+
+try:
+    PORT = int(input("Please enter the host PORT (8091): "))
+except ValueError:
+    PORT = 8091
 
 BREAK1 = "<BREAK1>"  # use to split between LEVEL1 data
 BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data

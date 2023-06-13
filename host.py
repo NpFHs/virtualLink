@@ -10,6 +10,7 @@ import rsa
 import PIL
 from PIL import Image, ImageTk
 import shutil
+import platform
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -25,8 +26,17 @@ client_public_key = None
 current_file_in_files_list = 0  # indicate the current file location for tab_complete()
 pre_command = ""  # save the original command for tab_complete()\
 is_files_list_change = False  # mark when get new files list
-is_screen_live = True
+is_screen_live = False
 is_alive = True  # keep all threads alive
+
+if platform.system() == "Linux":
+    current_screen_path = "./images/current_screen.jpg"
+    pre_screen_path = "./images/pre_screen.jpg"
+
+else:
+    current_screen_path = r".\images\current_screen.jpg"
+    pre_screen_path = r".\images\pre_screen.jpg"
+
 
 
 # TODO: add multiple clients support. update: maybe not...
@@ -368,6 +378,7 @@ def open_folder(browser, client_socket):
         if file_type == "DIR":
             browser_previous_directory = current_directory
             current_directory = f"{current_directory}{file_name}/"
+            browser.current_path.set(current_directory)
             is_files_list_change = False
 
             request_files_in_location(client_socket, current_directory)
@@ -400,6 +411,7 @@ def browser_go_back(browser, client_socket):
     if current_directory.count("/") > 1:
         current_directory = "/".join(current_directory.split("/")[:-2]) + "/"  # update cwd
         request_files_in_location(client_socket, current_directory)
+        browser.current_path.set(current_directory)
         is_files_list_change = False
 
         # wait until the files list update
@@ -505,7 +517,7 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
     if msg == "start":
         # # somehow "wb" mode append instead of re-write the file.
         # open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "w").close()
-        with open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "wb") as current_screen:
+        with open(current_screen_path, "wb") as current_screen:
 
             live_screen_socket.send(str(ui.scale_var.get()).encode())
             while True and is_alive:
@@ -548,9 +560,8 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                     break
 
         # remove broken file
-        os.remove("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg")
-        shutil.copyfile("/home/noam/PycharmProjects/virtualLink/images/pre_screen.jpg",
-                        "/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg")
+        os.remove(current_screen_path)
+        shutil.copyfile(pre_screen_path, current_screen_path)
 
     else:
         print("screenshot format not valid!")

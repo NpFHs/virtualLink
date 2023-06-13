@@ -29,13 +29,16 @@ is_files_list_change = False  # mark when get new files list
 is_screen_live = False
 is_alive = True  # keep all threads alive
 
+
 if platform.system() == "Linux":
     current_screen_path = "./images/current_screen.jpg"
     pre_screen_path = "./images/pre_screen.jpg"
+    MONO_FONT_NAME = "FreeMono"
 
 else:
     current_screen_path = r".\images\current_screen.jpg"
     pre_screen_path = r".\images\pre_screen.jpg"
+    MONO_FONT_NAME = "Courier New"
 
 
 
@@ -69,7 +72,7 @@ class UserInterface(ttk.Frame):
         self.command = tk.StringVar(value="Enter a command")
         self.files = tk.StringVar()
         self.scale_var = tk.IntVar(value=50)
-        self.mono_font = font.Font(family="FreeMono")  # set the font to the msg_list
+        self.mono_font = font.Font(family=MONO_FONT_NAME)  # set the font to the msg_list
 
         self.client_address = "unknown"
 

@@ -60,6 +60,7 @@ def decrypt(msg):
         origin_msg = rsa.decrypt(msg, private_key)
     except rsa.pkcs1.DecryptionError:
         print("DecryptionError")
+        print(f"msg: {msg}")
         origin_msg = b"Error"
     return origin_msg
 

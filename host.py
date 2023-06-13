@@ -358,6 +358,7 @@ def execute_command(client_socket, ui):
 
 
 def request_file(file_location, client_socket):
+    print(f"file {file_location}")
     client_socket.send(encrypt(f"file {file_location}"))
 
 

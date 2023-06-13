@@ -276,12 +276,12 @@ class Browser(ttk.Frame):
 
 
 def encrypt(msg):
-    try:
-        enc_msg = rsa.encrypt(msg.encode(), client_public_key)
-        print(f"msg: {msg}")
-    except:
-        print("Encryption error")
-        enc_msg = b"error"
+    # try:
+    enc_msg = rsa.encrypt(msg.encode(), client_public_key)
+    print(f"msg: {msg}")
+    # except:
+    #     print("Encryption error")
+    #     enc_msg = b"error"
     return enc_msg
 
 

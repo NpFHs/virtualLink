@@ -29,7 +29,6 @@ is_files_list_change = False  # mark when get new files list
 is_screen_live = False
 is_alive = True  # keep all threads alive
 
-
 if platform.system() == "Linux":
     current_screen_path = "./images/current_screen.jpg"
     pre_screen_path = "./images/pre_screen.jpg"
@@ -39,10 +38,6 @@ else:
     current_screen_path = r".\images\current_screen.jpg"
     pre_screen_path = r".\images\pre_screen.jpg"
     MONO_FONT_NAME = "Courier New"
-
-
-
-# TODO: add multiple clients support. update: maybe not...
 
 
 def get_local_ip():
@@ -282,7 +277,8 @@ class Browser(ttk.Frame):
 
 def encrypt(msg):
     try:
-        enc_msg = rsa.encrypt(msg.encode(), client_public_key)  # NOQA
+        enc_msg = rsa.encrypt(msg.encode(), client_public_key)
+        print(f"msg: {msg}")
     except:
         print("Encryption error")
         enc_msg = b"error"
@@ -603,6 +599,7 @@ def update_screen(screen_label):
 
     screen_label.configure(image=current_screen)
     screen_label.image = current_screen
+
 
 def keep_client_screen_alive(live_screen_socket, ui):
     while is_alive:

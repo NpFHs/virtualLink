@@ -11,7 +11,7 @@ from PIL import Image
 BUFFER_SIZE = 4096
 SYSTEM_TYPE = platform.system()
 SYSTEM_NAME = os.popen("whoami").read().strip("\n")
-public_key, private_key = rsa.newkeys(2048)
+public_key, private_key = rsa.newkeys(512)
 host_public_key = None
 COMPRESSED_SCREENSHOT_WIDTH = 750
 screenshot_quality = 50
@@ -53,19 +53,19 @@ power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
 
 def encrypt(msg):
     fin_msg = b""
-    for i in range(0, len(msg), 245):
-        msg_part = msg[i:i + 245]
-        try:
-            enc_msg = rsa.encrypt(msg_part, host_public_key)
+    for i in range(0, len(msg), 53):
+        msg_part = msg[i:i + 53]
+        # try:
+        enc_msg = rsa.encrypt(msg_part, host_public_key)
 
-        except OverflowError:
-            fin_msg = rsa.encrypt(b"overFlowError", host_public_key)
-            print("OverflowError")
-            break
-        except:
-            print("Encryption error")
-            fin_msg = rsa.encrypt(b"error", host_public_key)
-            break
+        # except OverflowError:
+        #     fin_msg = rsa.encrypt(b"overFlowError", host_public_key)
+        #     print("OverflowError")
+        #     break
+        # except:
+        #     print("Encryption error")
+        #     fin_msg = rsa.encrypt(b"error", host_public_key)
+        #     break
         fin_msg += enc_msg
     return fin_msg
 
@@ -73,8 +73,8 @@ def encrypt(msg):
 def decrypt(enc_msg):
     # add except for case of failure in decryption.
     fin_msg = b""
-    for i in range(0, len(enc_msg), 256):
-        enc_msg_part = enc_msg[i:i + 256]
+    for i in range(0, len(enc_msg), 64):
+        enc_msg_part = enc_msg[i:i + 64]
         try:
             origin_msg = rsa.decrypt(enc_msg_part, private_key)
         except rsa.pkcs1.DecryptionError:

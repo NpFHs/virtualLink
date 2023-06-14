@@ -21,7 +21,7 @@ pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
 current_directory = "/"
 files_list = []
-public_key, private_key = rsa.newkeys(2048)
+public_key, private_key = rsa.newkeys(512)
 client_public_key = None
 current_file_in_files_list = 0  # indicate the current file location for tab_complete()
 pre_command = ""  # save the original command for tab_complete()\
@@ -277,18 +277,18 @@ class Browser(ttk.Frame):
 
 def encrypt(msg):
     fin_msg = b""
-    for i in range(0, len(msg), 245):
-        msg_part = msg[i:i + 245]
-        try:
-            enc_msg = rsa.encrypt(msg_part.encode(), client_public_key)
-        except OverflowError:
-            fin_msg = rsa.encrypt(b"overFlowError", client_public_key)
-            print("OverflowError")
-            break
-        except:
-            print("Encryption error")
-            fin_msg = rsa.encrypt(b"error", client_public_key)
-            break
+    for i in range(0, len(msg), 53):
+        msg_part = msg[i:i + 53]
+        # try:
+        enc_msg = rsa.encrypt(msg_part.encode(), client_public_key)
+        # except OverflowError:
+        #     fin_msg = rsa.encrypt(b"overFlowError", client_public_key)
+        #     print("OverflowError")
+        #     break
+        # except:
+        #     print("Encryption error")
+        #     fin_msg = rsa.encrypt(b"error", client_public_key)
+        #     break
         fin_msg += enc_msg
     return fin_msg
 
@@ -296,8 +296,8 @@ def encrypt(msg):
 def decrypt(enc_msg):
     # add except for case of failure in decryption.
     fin_msg = b""
-    for i in range(0, len(enc_msg), 256):
-        enc_msg_part = enc_msg[i:i + 256]
+    for i in range(0, len(enc_msg), 64):
+        enc_msg_part = enc_msg[i:i + 64]
         try:
             origin_msg = rsa.decrypt(enc_msg_part, private_key)
         except rsa.pkcs1.DecryptionError:

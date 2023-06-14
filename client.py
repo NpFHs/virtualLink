@@ -72,8 +72,6 @@ def encrypt(msg):
 
 def decrypt(enc_msg):
     # add except for case of failure in decryption.
-    print(f"enc_msg: {enc_msg}")
-    print(f"len(enc_msg): {len(enc_msg)}")
     fin_msg = b""
     for i in range(0, len(enc_msg), 256):
         enc_msg_part = enc_msg[i:i + 256]
@@ -137,7 +135,6 @@ def send_response(client_socket, msg_type, msg):
     if msg_type == "filepart" or msg_type == "screenshot_part":
         enc_response = encrypt(msg)
         resp_len = str(len(enc_response)).zfill(8).encode()
-        print(f"len(enc_response: {len(enc_response)}")
         resp = resp_len + enc_response
 
     elif msg_type == "public_key":
@@ -182,7 +179,6 @@ def convert_file_size(size):
         converted_size = round(size / 1000000000, 2)
         return f"{converted_size} {unit}"
     else:
-        # print(f"size: {size}")
         print(size // 1000000000000)
         unit = "TB"
         converted_size = round(size / 1000000000000, 2)
@@ -203,7 +199,6 @@ def send_screenshot(live_screen_socket, path):
     with open(path, "rb") as img:
         while True:
             status_code = live_screen_socket.recv(1024).decode()
-            print(f"status_code: {status_code}")
             if status_code == "-1":
                 break
             elif status_code == "":
@@ -213,18 +208,15 @@ def send_screenshot(live_screen_socket, path):
                 screenshot_quality = int(status_code)
                 data = img.read(BUFFER_SIZE)
                 if len(data) == 0:
-                    print("screenshot sent!")
                     # send the "screenshot done" msg.
                     send_response(live_screen_socket, "screenshot", "done")
 
                     break
-                print(f"len(data): {len(data)}")
                 send_response(live_screen_socket, "screenshot_part", data)
 
 
 def handle_screenshot(live_screen_socket):
     take_screenshot(screenshot_path)
-    # print(f"screenshot_quality: {screenshot_quality}")
     compress_img(screenshot_path, quality=screenshot_quality, width=COMPRESSED_SCREENSHOT_WIDTH)
     send_screenshot(live_screen_socket, compressed_screenshot_path)
     return "screenshot", "done"
@@ -326,9 +318,7 @@ def handle_server_response(command, client_socket, live_screen_socket):
         return handle_screenshot(live_screen_socket)
 
     elif cmd_type == "public_key":
-        print(cmd)
         host_public_key = rsa.key.PublicKey.load_pkcs1(cmd, format="DER")
-        print(host_public_key)
 
     return "exit", 0
 
@@ -339,7 +329,6 @@ def send_basic_info(client_socket):
 
 
 def send_public_key(client_socket):
-    # print(public_key.save_pkcs1(format="DER"))
     send_response(client_socket, "public_key", public_key.save_pkcs1(format="DER"))
 
 
@@ -357,9 +346,7 @@ def get_host_key(client_socket):
     msg_type = cmd.split()[0]
     msg = b" ".join(cmd.split(b" ")[1:])
 
-    print(msg)
     host_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
-    print(host_public_key)
 
 
 def main():
@@ -378,9 +365,8 @@ def main():
 
     send_public_key(client_socket)
     get_host_key(client_socket)
-    print("waiting...")
+
     wait_to_host_key()
-    print("host key received!")
 
     send_basic_info(client_socket)
 
@@ -392,7 +378,6 @@ def main():
         # decrypt the command
         command = decrypt(command)
 
-        print(f"command: {command}")
         if len(command.split()) >= 2:
             cmd_type, cmd = handle_server_response(command, client_socket, live_screen_socket)
         else:

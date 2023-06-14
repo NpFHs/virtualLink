@@ -309,7 +309,6 @@ def decrypt(enc_msg):
 
 
 def send_public_key(client_socket):
-    print(f'public_key: {public_key.save_pkcs1(format="DER")}')
     client_socket.send(b"public_key " + public_key.save_pkcs1(format="DER"))
 
 
@@ -364,7 +363,6 @@ def execute_command(client_socket, ui):
             ui.msg_list.delete(0, tk.END)
         else:
             command = f"execute {cmd}"
-            print(command)
             client_socket.send(encrypt(command))
 
         # keep the files list up to date
@@ -541,11 +539,9 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
             live_screen_socket.send(str(ui.scale_var.get()).encode())
             while True and is_alive:
                 data_len = live_screen_socket.recv(8)
-                print(f"data_len: {data_len}")
                 if data_len.isdigit():
                     enc_data = live_screen_socket.recv(int(data_len))
                     data = decrypt(enc_data)
-                    print(f"len(data): {len(data)}")
 
                     missing_data_len = int(data_len) - len(enc_data)
                     while missing_data_len != 0:
@@ -562,16 +558,14 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                     current_screen.write(data)
                     try:
                         live_screen_socket.send(str(ui.scale_var.get()).encode())
-                        print(ui.scale_var.get())
                     except RuntimeError:
                         print("exit 550")
 
                 else:
                     print("wrong message format! (missing length data)")
-                    # print(f"data_len: {data_len}")
                     # clean garbage
                     trash = live_screen_socket.recv(16777216)
-                    # print(f"len(trash): {len(trash)}")
+
                     # tell the client to re-send the image
                     live_screen_socket.send("-1".encode())
                     # raise "LengthError"
@@ -632,7 +626,6 @@ def stop_live_screen():
 def start_live_screen():
     global is_screen_live
     is_screen_live = True
-    # print(is_screen_live)
 
 
 def command_up(ui):
@@ -762,8 +755,6 @@ def receive(client_socket, ui):
         try:
             msg_type, msg = get_resp(client_socket)
 
-            # print(f"type(msg): {type(msg)}")
-            print(f"msg: {msg}")
             if msg_type == "sys_info":
                 receive_sys_info(msg.decode(), ui.client_dist, ui.client_name_with_name, ui.client_name)
 
@@ -778,7 +769,6 @@ def receive(client_socket, ui):
 
             elif msg_type == "public_key":
                 client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
-                # print(f"\ntype(client_public_key): {type(client_public_key)}\nclient_public_key: {client_public_key}\n")  # NOQA
 
             else:
                 print(f"Wrong message type! (message: {msg_type})")
@@ -793,7 +783,6 @@ def get_client_key(client_socket):
     msg_len = client_socket.recv(8)
     msg = client_socket.recv(int(msg_len))
     msg = b" ".join(msg.split(b" ")[1:])
-    print(f"client_public_key: {msg}")
     client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
 
 
@@ -826,7 +815,6 @@ def main():
     ui.set_client_address(client_address)
 
     send_public_key(client_socket)
-    print("public key sent!")
     get_client_key(client_socket)
 
     while True:
@@ -834,7 +822,6 @@ def main():
             break
         time.sleep(0.1)
 
-    print("client public key got!")
 
     # keep the files list updated
     request_files_in_location(client_socket)

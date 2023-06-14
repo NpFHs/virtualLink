@@ -1,16 +1,16 @@
 import os.path
+import PIL
+from PIL import Image, ImageTk
+import platform
+import rsa
+import socket
+import shutil
 import struct
 import time
 import tkinter as tk
 from tkinter import ttk
-import socket
 from threading import *
 from tkinter import font
-import rsa
-import PIL
-from PIL import Image, ImageTk
-import shutil
-import platform
 
 IP: str = "0.0.0.0"
 PORT: int = 8091
@@ -21,7 +21,7 @@ pre_commands = []  # Storing the last commands the user enter.
 current_command = 0  # Use to save the command location when the user press Up button.
 current_directory = "/"
 files_list = []
-public_key, private_key = rsa.newkeys(512)
+public_key, private_key = rsa.newkeys(2048)
 client_public_key = None
 current_file_in_files_list = 0  # indicate the current file location for tab_complete()
 pre_command = ""  # save the original command for tab_complete()\
@@ -276,23 +276,41 @@ class Browser(ttk.Frame):
 
 
 def encrypt(msg):
-    # try:
-    enc_msg = rsa.encrypt(msg.encode(), client_public_key)
-    print(f"msg: {msg}")
-    # except:
-    #     print("Encryption error")
-    #     enc_msg = b"error"
-    return enc_msg
+    fin_msg = b""
+    for i in range(0, len(msg), 245):
+        msg_part = msg[i:i + 245]
+        try:
+            enc_msg = rsa.encrypt(msg_part.encode(), client_public_key)
+        except OverflowError:
+            fin_msg = rsa.encrypt(b"overFlowError", client_public_key)
+            print("OverflowError")
+            break
+        except:
+            print("Encryption error")
+            fin_msg = rsa.encrypt(b"error", client_public_key)
+            break
+        fin_msg += enc_msg
+    return fin_msg
 
 
-def decrypt(msg):
+def decrypt(enc_msg):
     # add except for case of failure in decryption.
-    origin_msg = rsa.decrypt(msg, private_key)
-    return origin_msg
+    fin_msg = b""
+    for i in range(0, len(enc_msg), 256):
+        enc_msg_part = enc_msg[i:i + 256]
+        try:
+            origin_msg = rsa.decrypt(enc_msg_part, private_key)
+        except rsa.pkcs1.DecryptionError:
+            print("DecryptionError")
+            fin_msg = b"Error"
+            break
+        fin_msg += origin_msg
+    return fin_msg
 
 
 def send_public_key(client_socket):
-    pass
+    print(f'public_key: {public_key.save_pkcs1(format="DER")}')
+    client_socket.send(b"public_key " + public_key.save_pkcs1(format="DER"))
 
 
 def shutdown(client_socket):
@@ -320,9 +338,7 @@ def get_resp(client_socket):
     msg_len = client_socket.recv(8)
     if msg_len.isdigit():
         enc_resp = client_socket.recv(int(msg_len))
-        # print(f"enc_resp: {enc_resp}")
-
-        resp = enc_resp
+        resp = decrypt(enc_resp)
     else:
         print("No length info!")
 
@@ -348,6 +364,7 @@ def execute_command(client_socket, ui):
             ui.msg_list.delete(0, tk.END)
         else:
             command = f"execute {cmd}"
+            print(command)
             client_socket.send(encrypt(command))
 
         # keep the files list up to date
@@ -483,11 +500,13 @@ def receive_file(msg, client_socket, files):
                 msg_len = client_socket.recv(8)
 
                 if msg_len.isdigit():
-                    bytes_file = client_socket.recv(int(msg_len))
-                    missing_data_length = int(msg_len) - len(bytes_file)
+                    enc_bytes_file = client_socket.recv(int(msg_len))
+                    missing_data_length = int(msg_len) - len(enc_bytes_file)
                     while missing_data_length != 0:
-                        bytes_file += client_socket.recv(int(missing_data_length))
-                        missing_data_length = int(msg_len) - len(bytes_file)
+                        enc_bytes_file += client_socket.recv(int(missing_data_length))
+                        missing_data_length = int(msg_len) - len(enc_bytes_file)
+
+                    bytes_file = decrypt(enc_bytes_file)
 
                 else:
                     print("No length info!")
@@ -517,26 +536,22 @@ def receive_files_list(msg):
 
 def receive_screenshot(live_screen_socket, ui, msg="start"):
     if msg == "start":
-        # # somehow "wb" mode append instead of re-write the file.
-        # open("/home/noam/PycharmProjects/virtualLink/images/current_screen.jpg", "w").close()
         with open(current_screen_path, "wb") as current_screen:
 
             live_screen_socket.send(str(ui.scale_var.get()).encode())
             while True and is_alive:
                 data_len = live_screen_socket.recv(8)
-                # print(f"data_len: {data_len}")
+                print(f"data_len: {data_len}")
                 if data_len.isdigit():
-                    # make the scale logarithmic
-                    # delay_time = 10 ** ui.screenparts_delay.get()
-                    # print(f"delay: {delay_time}")
-                    # time.sleep(delay_time)
-                    data = live_screen_socket.recv(int(data_len))
-                    # print(f"len(data): {len(data)}")
-                    missing_data_len = int(data_len) - len(data)
-                    while missing_data_len != 0:
-                        data += live_screen_socket.recv(missing_data_len)
-                        missing_data_len = int(data_len) - len(data)
+                    enc_data = live_screen_socket.recv(int(data_len))
+                    data = decrypt(enc_data)
+                    print(f"len(data): {len(data)}")
 
+                    missing_data_len = int(data_len) - len(enc_data)
+                    while missing_data_len != 0:
+                        enc_data += live_screen_socket.recv(missing_data_len)
+                        data = decrypt(enc_data)
+                        missing_data_len = int(data_len) - len(enc_data)
                     if data == b"screenshot done":
                         # print(data)
                         # print("pre screen updated.")
@@ -547,6 +562,7 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                     current_screen.write(data)
                     try:
                         live_screen_socket.send(str(ui.scale_var.get()).encode())
+                        print(ui.scale_var.get())
                     except RuntimeError:
                         print("exit 550")
 
@@ -772,6 +788,15 @@ def receive(client_socket, ui):
             break
 
 
+def get_client_key(client_socket):
+    global client_public_key
+    msg_len = client_socket.recv(8)
+    msg = client_socket.recv(int(msg_len))
+    msg = b" ".join(msg.split(b" ")[1:])
+    print(f"client_public_key: {msg}")
+    client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
+
+
 def main():
     global is_screen_live, is_alive, PORT
 
@@ -781,11 +806,13 @@ def main():
     root.title("Remote Control")
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        server_socket.bind((IP, PORT))
-    except OSError:
-        PORT += 1
-        server_socket.bind((IP, PORT))
+    is_bind_success = False
+    while not is_bind_success:
+        try:
+            server_socket.bind(("0.0.0.0", PORT))
+            is_bind_success = True
+        except OSError:
+            PORT += 1
 
     print(f"ip:\t\t{get_local_ip()}\nport:\t{PORT}\n")
 
@@ -798,20 +825,26 @@ def main():
     ui = UserInterface(root)
     ui.set_client_address(client_address)
 
-    receive_thread = Thread(target=lambda: receive(client_socket, ui))
-    receive_thread.start()
-    ui_buttons_thread = Thread(target=lambda: handle_ui_buttons(ui, client_socket))
-    ui_buttons_thread.start()
-    client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, ui))
-    client_live_screen.start()
+    send_public_key(client_socket)
+    print("public key sent!")
+    get_client_key(client_socket)
 
     while True:
         if client_public_key is not None:
             break
         time.sleep(0.1)
 
+    print("client public key got!")
+
     # keep the files list updated
     request_files_in_location(client_socket)
+
+    receive_thread = Thread(target=lambda: receive(client_socket, ui))
+    receive_thread.start()
+    ui_buttons_thread = Thread(target=lambda: handle_ui_buttons(ui, client_socket))
+    ui_buttons_thread.start()
+    client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, ui))
+    client_live_screen.start()
 
     root.mainloop()
 

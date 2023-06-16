@@ -26,7 +26,7 @@ client_public_key = None
 current_file_in_files_list = 0  # indicate the current file location for tab_complete()
 pre_command = ""  # save the original command for tab_complete()\
 is_files_list_change = False  # mark when get new files list
-is_screen_live = False
+is_screen_live = True
 is_alive = True  # keep all threads alive
 
 if platform.system() == "Linux":
@@ -59,6 +59,9 @@ class UserInterface(ttk.Frame):
         ttk.Frame.__init__(self)
 
         root.geometry("800x610")
+
+        # to avoid errors when resizing the screenshot
+        root.minsize(60, 220)
         self.tab_frame = ttk.Notebook()
         self.tab_frame.pack(padx=5, pady=5, fill="both", expand=True)
         self.client_dist = tk.StringVar(value="Unknown")
@@ -96,7 +99,8 @@ class UserInterface(ttk.Frame):
 
                 # create the started chart var
                 self.start_screen = ImageTk.PhotoImage(
-                    Image.open("./images/fullscreen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+                    Image.open("./images/fullscreen.jpg").resize(
+                        (CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
 
                 self.screen_label = ttk.Label(self.tabs[tab], image=self.start_screen)
                 # keep reference to the img, so it doesn't get prematurely garbage collected at the end of the function
@@ -175,6 +179,12 @@ class UserInterface(ttk.Frame):
     def set_client_address(self, client_address):
         self.client_address = client_address
         self.ip_label.configure(text=f"ip address: {self.client_address}")
+
+    def get_screen_width(self):
+        return self.tab_frame.winfo_width()
+
+    def get_screen_height(self):
+        return self.tab_frame.winfo_height()
 
     def send_button(self):
         self.execute_flag = True
@@ -256,14 +266,6 @@ class Browser(ttk.Frame):
         self.back_button = ttk.Button(self.top, text="<", width=1,
                                       command=lambda: self.browser_go_back())
         self.back_button.pack(side="right", anchor="nw", padx=10, pady=(10, 0))
-        #
-        # request_files_in_location(client_socket, current_directory)
-        # time.sleep(0.5)  # wait until the files list update TODO: it's ABSOLUTELY WRONG way to do it
-        # self.file_browser.delete(*file_browser.get_children())
-        #
-        # for file in files_list:
-        #     tuple_file = file.split(BREAK2)  # split the file string to the browser columns
-        #     self.file_browser.insert("", tk.END, values=tuple_file)
 
     def get_file(self):
         self.get_file_flag = True
@@ -340,10 +342,11 @@ def get_resp(client_socket):
         resp = decrypt(enc_resp)
     else:
         print("No length info!")
+        print(msg_len)
 
         # clean possible garbage
         client_socket.recv(16777216)
-        resp = b"Error, no length info!"
+        resp = b"Error no length info!"
 
     try:
         msg_type = resp.split()[0].decode()
@@ -357,10 +360,12 @@ def get_resp(client_socket):
 
 def execute_command(client_socket, ui):
     cmd = ui.command_entry.get()
+
     # avoid index error on empty command
     if cmd:
         if cmd == "clear":
             ui.msg_list.delete(0, tk.END)
+
         else:
             command = f"execute {cmd}"
             client_socket.send(encrypt(command))
@@ -589,23 +594,24 @@ def get_screenshot(live_screen_socket, ui):
     receive_screenshot(live_screen_socket, ui)
 
     try:
-        update_screen(ui.screen_label)
+        update_screen(ui)
     except RuntimeError:
         pass
 
 
-def update_screen(screen_label):
+def update_screen(ui):
+    screen_label = ui.screen_label
     try:
-        current_screen = ImageTk.PhotoImage(
-            Image.open("./images/current_screen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+        current_screen = ImageTk.PhotoImage(Image.open("./images/current_screen.jpg").resize(
+            (ui.get_screen_width() - 40, ui.get_screen_height() - 170)))
         a = current_screen
     except (SyntaxError, PIL.UnidentifiedImageError, OSError):
         try:
-            current_screen = ImageTk.PhotoImage(
-                Image.open("./images/pre_screen.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+            current_screen = ImageTk.PhotoImage(Image.open("./images/pre_screen.jpg").resize(
+                (ui.get_screen_width() - 40, ui.get_screen_height() - 170)))
         except (SyntaxError, PIL.UnidentifiedImageError, OSError):
             current_screen = ImageTk.PhotoImage(
-                Image.open("./images/bad_image.jpg").resize((CLIENT_SCREEN_WIDTH, CLIENT_SCREEN_WIDTH * 9 // 16)))
+                Image.open("./images/bad_image.jpg").resize((ui.get_screen_width() - 40, ui.get_screen_height() - 170)))
 
     screen_label.configure(image=current_screen)
     screen_label.image = current_screen
@@ -810,7 +816,7 @@ def main():
         except OSError:
             PORT += 1
 
-    print(f"ip:\t\t{get_local_ip()}\nport:\t{PORT}\n")
+    print(f"ip:\t{get_local_ip()}\nport:\t{PORT}\n")
 
     server_socket.listen()
     print("Listening...")

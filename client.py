@@ -237,12 +237,16 @@ def handle_server_response(command, client_socket, live_screen_socket):
         return "power", "done"
 
     elif cmd_type == "execute":
-        if cmd.split()[0] == "cd":
+        print(f"cmd: {cmd}")
+        if cmd.split()[0] == b"cd":
             try:
                 os.chdir(cmd.decode().split()[1])
+                print(f"cmd.decode().split()[1]: {cmd.decode().split()[1]}")
                 output = os.getcwd()
             except FileNotFoundError:
                 output = "No such file or directory!"
+
+            # if the command is "cd" with no directory specified
             except IndexError:
                 os.chdir(os.path.expanduser("~"))
                 output = os.getcwd()

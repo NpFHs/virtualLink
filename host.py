@@ -786,6 +786,13 @@ def get_client_key(client_socket):
     client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
 
 
+def wait_to_client_key():
+    while True:
+        if client_public_key is not None:
+            break
+        time.sleep(0.1)
+
+
 def main():
     global is_screen_live, is_alive, PORT
 
@@ -814,14 +821,10 @@ def main():
     ui = UserInterface(root)
     ui.set_client_address(client_address)
 
+    # replace keys
     send_public_key(client_socket)
     get_client_key(client_socket)
-
-    while True:
-        if client_public_key is not None:
-            break
-        time.sleep(0.1)
-
+    wait_to_client_key()
 
     # keep the files list updated
     request_files_in_location(client_socket)

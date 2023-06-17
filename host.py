@@ -62,6 +62,7 @@ class UserInterface(ttk.Frame):
 
         # to avoid errors when resizing the screenshot
         root.minsize(60, 220)
+        self.root = root
         self.tab_frame = ttk.Notebook()
         self.tab_frame.pack(padx=5, pady=5, fill="both", expand=True)
         self.client_dist = tk.StringVar(value="Unknown")
@@ -335,11 +336,16 @@ def log_out(client_socket):
     print(command)
 
 
-def get_resp(client_socket):
+def get_resp(client_socket, ui):
+    global is_alive
     msg_len = client_socket.recv(8)
     if msg_len.isdigit():
         enc_resp = client_socket.recv(int(msg_len))
         resp = decrypt(enc_resp)
+
+    elif msg_len == b"":
+        ui.destroy()
+        resp = b"exit 0"
     else:
         print("No length info!")
         print(msg_len)
@@ -538,12 +544,20 @@ def receive_files_list(msg):
 
 
 def receive_screenshot(live_screen_socket, ui, msg="start"):
+    global is_alive
     if msg == "start":
         with open(current_screen_path, "wb") as current_screen:
+            try:
+                live_screen_socket.send(str(ui.scale_var.get()).encode())
+            except BrokenPipeError:
+                is_alive = False
 
-            live_screen_socket.send(str(ui.scale_var.get()).encode())
-            while True and is_alive:
-                data_len = live_screen_socket.recv(8)
+            while is_alive:
+                try:
+                    data_len = live_screen_socket.recv(8)
+                except ConnectionResetError:
+                    data_len = b""
+
                 if data_len.isdigit():
                     enc_data = live_screen_socket.recv(int(data_len))
                     data = decrypt(enc_data)
@@ -565,7 +579,8 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                         live_screen_socket.send(str(ui.scale_var.get()).encode())
                     except RuntimeError:
                         print("exit 550")
-
+                elif data_len == b"":
+                    is_alive = False
                 else:
                     print("wrong message format! (missing length data)")
                     # clean garbage
@@ -600,11 +615,14 @@ def get_screenshot(live_screen_socket, ui):
 
 
 def update_screen(ui):
+    """
+    update the live screen image from "./images/current_screen.jpg" and fit it to the screen.
+    """
     screen_label = ui.screen_label
     try:
         current_screen = ImageTk.PhotoImage(Image.open("./images/current_screen.jpg").resize(
             (ui.get_screen_width() - 40, ui.get_screen_height() - 170)))
-        a = current_screen
+        # a = current_screen
     except (SyntaxError, PIL.UnidentifiedImageError, OSError):
         try:
             current_screen = ImageTk.PhotoImage(Image.open("./images/pre_screen.jpg").resize(
@@ -618,10 +636,10 @@ def update_screen(ui):
 
 
 def keep_client_screen_alive(live_screen_socket, ui):
-    while is_alive:
-        while is_screen_live:
-            get_screenshot(live_screen_socket, ui)
-        time.sleep(0.1)
+    while is_screen_live and is_alive:
+        get_screenshot(live_screen_socket, ui)
+    update_screen(ui)
+    # time.sleep(0.1)
 
 
 def stop_live_screen():
@@ -739,7 +757,7 @@ def handle_ui_buttons(ui, client_socket):
 def handle_file_browser(browser, client_socket):
     while browser.top.winfo_exists() and is_alive:
         if browser.get_file_flag:
-            request_file(browser.file_location.get(), client_socket)
+            request_file(browser.file_locahraeion.get(), client_socket)
             browser.location_entry.delete(0, tk.END)
             browser.get_file_flag = False
 
@@ -751,7 +769,7 @@ def handle_file_browser(browser, client_socket):
             browser_go_back(browser, client_socket)
             browser.go_back_flag = False
 
-        time.sleep(0.5)
+        time.sleep(0.1)
 
 
 def receive(client_socket, ui):
@@ -759,8 +777,8 @@ def receive(client_socket, ui):
     print("Start receiving")
     while is_alive:
         try:
-            msg_type, msg = get_resp(client_socket)
-
+            msg_type, msg = get_resp(client_socket, ui)
+            print(f"msg: {msg}")
             if msg_type == "sys_info":
                 receive_sys_info(msg.decode(), ui.client_dist, ui.client_name_with_name, ui.client_name)
 
@@ -775,6 +793,9 @@ def receive(client_socket, ui):
 
             elif msg_type == "public_key":
                 client_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")
+
+            elif msg_type == "exit":
+                break
 
             else:
                 print(f"Wrong message type! (message: {msg_type})")
@@ -842,7 +863,8 @@ def main():
     client_live_screen = Thread(target=lambda: keep_client_screen_alive(live_screen_socket, ui))
     client_live_screen.start()
 
-    root.mainloop()
+    ui.mainloop()
+    print("exited!")
 
     client_socket.send(encrypt("exit 0"))
     is_alive = False

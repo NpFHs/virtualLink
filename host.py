@@ -62,7 +62,6 @@ class UserInterface(ttk.Frame):
 
         # to avoid errors when resizing the screenshot
         root.minsize(60, 220)
-        self.root = root
         self.tab_frame = ttk.Notebook()
         self.tab_frame.pack(padx=5, pady=5, fill="both", expand=True)
         self.client_dist = tk.StringVar(value="Unknown")
@@ -578,7 +577,7 @@ def receive_screenshot(live_screen_socket, ui, msg="start"):
                     try:
                         live_screen_socket.send(str(ui.scale_var.get()).encode())
                     except RuntimeError:
-                        print("exit 550")
+                        is_alive = False
                 elif data_len == b"":
                     is_alive = False
                 else:
@@ -636,10 +635,13 @@ def update_screen(ui):
 
 
 def keep_client_screen_alive(live_screen_socket, ui):
-    while is_screen_live and is_alive:
-        get_screenshot(live_screen_socket, ui)
-    update_screen(ui)
-    # time.sleep(0.1)
+    while is_alive:
+        while is_screen_live:
+            get_screenshot(live_screen_socket, ui)
+            if not is_alive:
+                break
+        update_screen(ui)
+        # time.sleep(0.1)
 
 
 def stop_live_screen():
@@ -757,7 +759,7 @@ def handle_ui_buttons(ui, client_socket):
 def handle_file_browser(browser, client_socket):
     while browser.top.winfo_exists() and is_alive:
         if browser.get_file_flag:
-            request_file(browser.file_locahraeion.get(), client_socket)
+            request_file(browser.file_location.get(), client_socket)
             browser.location_entry.delete(0, tk.END)
             browser.get_file_flag = False
 
@@ -869,7 +871,6 @@ def main():
     client_socket.send(encrypt("exit 0"))
     is_alive = False
     is_screen_live = False
-    # time.sleep(10)
     server_socket.close()
     client_socket.close()
 

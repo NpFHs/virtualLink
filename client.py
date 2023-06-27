@@ -16,6 +16,7 @@ COMPRESSED_SCREENSHOT_WIDTH = 750
 screenshot_quality = 50
 is_alive = True
 
+# Path configurations based on the system type
 if SYSTEM_TYPE == "Windows":
     screenshot_path = r"C:\images\screen.jpg"
     compressed_screenshot_path = r"C:\images\screen.jpg"
@@ -29,11 +30,10 @@ else:
     compressed_screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
     # screenshot_path = "images/screen.png"
 
+# IP and PORT input from the user
 IP = input("Please enter the host IP (127.0.0.1): ")
-
 if IP == "" or len(IP.split(".")) != 4:
     IP = "127.0.0.1"
-
 try:
     PORT = int(input("Please enter the host PORT (8091): "))
 except ValueError:
@@ -42,6 +42,7 @@ except ValueError:
 BREAK1 = "<BREAK1>"  # use to split between LEVEL1 data
 BREAK2 = "<BREAK2>"  # use to split between LEVEL2 data
 
+# Power commands for different operating systems
 power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
                                "Linux": "shutdown now"},
                   "restart": {"Windows": "shutdown /r",
@@ -51,27 +52,44 @@ power_commands = {"shutdown": {"Windows": "shutdown /s /t 000",
 
 
 def encrypt(msg):
+    """
+    Encrypts the given message using the host's public key.
+
+    Args:
+        msg (bytes): The message to be encrypted.
+
+    Returns:
+        bytes: The encrypted message.
+    """
     fin_msg = b""
     for i in range(0, len(msg), 53):
         msg_part = msg[i:i + 53]
         try:
-            enc_msg = rsa.encrypt(msg_part, host_public_key)
+            enc_msg = rsa.encrypt(msg_part, host_public_key)  # NOQA
 
         except OverflowError:
-            fin_msg = rsa.encrypt(b"overFlowError", host_public_key)
+            fin_msg = rsa.encrypt(b"overFlowError", host_public_key)  # NOQA
             print("OverflowError")
             break
 
         except:
             print("Encryption error")
-            fin_msg = rsa.encrypt(b"error", host_public_key)
+            fin_msg = rsa.encrypt(b"error", host_public_key)  # NOQA
             break
         fin_msg += enc_msg
     return fin_msg
 
 
 def decrypt(enc_msg):
-    # add except for case of failure in decryption.
+    """
+    Decrypts the given encrypted message using the client's private key.
+
+    Args:
+        enc_msg (bytes): The encrypted message to be decrypted.
+
+    Returns:
+        bytes: The decrypted message.
+    """
     fin_msg = b""
     for i in range(0, len(enc_msg), 64):
         enc_msg_part = enc_msg[i:i + 64]
@@ -86,6 +104,20 @@ def decrypt(enc_msg):
 
 
 def compress_img(image_name, new_size_ratio=0.9, quality=90, width=None, height=None, to_jpg=True):
+    """
+     Compress the image to reduce its size.
+
+     Args:
+         image_name (str): The path to the image file.
+         new_size_ratio (float, optional): The resizing ratio. Defaults to 0.9.
+         quality (int, optional): The image quality (0-100). Defaults to 90.
+         width (int, optional): The desired width of the compressed image. Defaults to None.
+         height (int, optional): The desired height of the compressed image. Defaults to None.
+         to_jpg (bool, optional): Convert the compressed image to JPG format. Defaults to True.
+
+     Returns:
+         str: The path to the compressed image file.
+     """
     # load the image to memory
     img = Image.open(image_name)
     # get the original image size in bytes
@@ -122,6 +154,13 @@ def compress_img(image_name, new_size_ratio=0.9, quality=90, width=None, height=
 
 
 def wait_to_host_key():
+    """
+    Wait until the host public key is available.
+
+    This function continuously checks for the availability of the host public key.
+    It waits until the host public key is not None before breaking the loop.
+    """
+
     while True:
         if host_public_key is not None:
             break
@@ -130,6 +169,15 @@ def wait_to_host_key():
 
 def send_response(client_socket, msg_type, msg):
     # TODO: split long commands to many packets
+    # TODO: make the msg
+    """
+        Sends a response to the client socket.
+
+        Args:
+            client_socket (socket.socket): The client socket.
+            msg_type (str): The type of the message.
+            msg (str OR bytes): The message to be sent.
+    """
     path = os.getcwd()
 
     if msg_type == "filepart" or msg_type == "screenshot_part":
@@ -163,6 +211,15 @@ def send_response(client_socket, msg_type, msg):
 
 
 def convert_file_size(size):
+    """
+    Converts the given file size into a human-readable format.
+
+    Args:
+        size (int): The size of the file in bytes.
+
+    Returns:
+        str: The file size in a human-readable format.
+    """
     unit = "bytes"
     if size // 1000 == 0:
         return f"{size} {unit}"
@@ -186,13 +243,23 @@ def convert_file_size(size):
 
 def take_screenshot(path):
     """
-    take a screenshot and save it to given path.
+    Takes a screenshot and saves it to the given path.
+
+    Args:
+        path (str): The path to save the screenshot.
     """
     img = ImageGrab.grab()
     img.save(path)
 
 
 def send_screenshot(live_screen_socket, path):
+    """
+    Sends the screenshot data to the live screen socket.
+
+    Args:
+        live_screen_socket (socket.socket): The live screen socket to send the data to.
+        path (str): The path of the screenshot image file.
+    """
     global screenshot_quality, is_alive
 
     with open(path, "rb") as img:
@@ -215,6 +282,15 @@ def send_screenshot(live_screen_socket, path):
 
 
 def handle_screenshot(live_screen_socket):
+    """
+        Handles the process of taking a screenshot, compressing it, and sending it to the client.
+
+        Args:
+            live_screen_socket (socket.socket): The live screen socket to send the screenshot data to.
+
+        Returns:
+            tuple: A tuple containing the message type and status of the operation.
+        """
     take_screenshot(screenshot_path)
     compress_img(screenshot_path, quality=screenshot_quality, width=COMPRESSED_SCREENSHOT_WIDTH)
     send_screenshot(live_screen_socket, compressed_screenshot_path)
@@ -222,6 +298,17 @@ def handle_screenshot(live_screen_socket):
 
 
 def handle_server_response(command, client_socket, live_screen_socket):
+    """
+    Handles the server's response to a command received from the client.
+
+    Args:
+        command (bytes): The command received from the client.
+        client_socket (socket.socket): The client socket to send the response to.
+        live_screen_socket (socket.socket): The live screen socket to send the screenshot data to.
+
+    Returns:
+        tuple: A tuple containing the message type and response message.
+    """
     global host_public_key
 
     cmd_type = command.split()[0].decode()
@@ -325,15 +412,33 @@ def handle_server_response(command, client_socket, live_screen_socket):
 
 
 def send_basic_info(client_socket):
+    """
+    Sends the basic system information to the client.
+
+    Args:
+        client_socket (socket.socket): The client socket to send the information to.
+    """
     send_response(client_socket, "sys_info", f"os {SYSTEM_TYPE}")
     send_response(client_socket, "sys_info", f"name {SYSTEM_NAME}")
 
 
 def send_public_key(client_socket):
+    """
+    Sends the public key to the host.
+
+    Args:
+        client_socket (socket.socket): The socket.
+    """
     send_response(client_socket, "public_key", public_key.save_pkcs1(format="DER"))
 
 
 def keep_sending_screenshots(live_screen_socket):
+    """
+    Continuously captures and sends screenshots to the client.
+
+    Args:
+        live_screen_socket (socket.socket): The live screen socket.
+    """
     while is_alive:
         # wait until the host get the screenshot
         msg_type, msg = handle_screenshot(live_screen_socket)
@@ -342,6 +447,12 @@ def keep_sending_screenshots(live_screen_socket):
 
 
 def get_host_key(client_socket):
+    """
+    Retrieves and sets the host public key.
+
+    Args:
+        client_socket (socket.socket): The socket.
+    """
     global host_public_key
     cmd = client_socket.recv(1024)
     msg_type = cmd.split()[0]

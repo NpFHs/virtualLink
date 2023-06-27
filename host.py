@@ -494,7 +494,8 @@ def receive_execute(msg, msg_list, client_name):
     msg_list.see(tk.END)
 
 
-def receive_file(msg, client_socket, files):
+def receive_file(msg, client_socket, ui):
+    # files = ui.files
     if msg.split()[0] == "FileNotFound":
         print("file not found!")
     else:
@@ -530,7 +531,7 @@ def receive_file(msg, client_socket, files):
                     break
 
                 file.write(bytes_file)
-            files.set(f"{files.get()}\n{file_name}".strip("\n"))
+            ui.files.set(f"{ui.files.get()}\n{file_name}".strip("\n"))
 
 
 def receive_files_list(msg):
@@ -788,7 +789,7 @@ def receive(client_socket, ui):
                 receive_execute(msg.decode(), ui.msg_list, ui.client_name)
 
             elif msg_type == "file":
-                receive_file(msg.decode(), client_socket, ui.files)
+                receive_file(msg.decode(), client_socket, ui)
 
             elif msg_type == "files_list":
                 receive_files_list(msg.decode())

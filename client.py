@@ -4,7 +4,7 @@ import platform
 import time
 import rsa
 import pyscreenshot as ImageGrab
-from threading import *
+from threading import Thread
 from PIL import Image
 
 BUFFER_SIZE = 4096
@@ -19,7 +19,7 @@ is_alive = True
 # Path configurations based on the system type
 if SYSTEM_TYPE == "Windows":
     screenshot_path = r"C:\images\screen.jpg"
-    compressed_screenshot_path = r"C:\images\screen.jpg"
+    COMPRESSED_SCREENSHOT_PATH = r"C:\images\screen.jpg"
     try:
         os.mkdir(r"C:\images")
     except FileExistsError:
@@ -27,7 +27,7 @@ if SYSTEM_TYPE == "Windows":
 
 else:
     screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
-    compressed_screenshot_path = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
+    COMPRESSED_SCREENSHOT_PATH = "/home/noam/PycharmProjects/virtualLink/images/screen.jpg"
     # screenshot_path = "images/screen.png"
 
 # IP and PORT input from the user
@@ -64,6 +64,7 @@ def encrypt(msg):
     fin_msg = b""
     for i in range(0, len(msg), 53):
         msg_part = msg[i:i + 53]
+
         try:
             enc_msg = rsa.encrypt(msg_part, host_public_key)  # NOQA
 
@@ -72,10 +73,11 @@ def encrypt(msg):
             print("OverflowError")
             break
 
-        except:
+        except:  # noqa: E722
             print("Encryption error")
             fin_msg = rsa.encrypt(b"error", host_public_key)  # NOQA
             break
+
         fin_msg += enc_msg
     return fin_msg
 
@@ -120,8 +122,8 @@ def compress_img(image_name, new_size_ratio=0.9, quality=90, width=None, height=
      """
     # load the image to memory
     img = Image.open(image_name)
-    # get the original image size in bytes
-    image_size = os.path.getsize(image_name)
+    # # get the original image size in bytes
+    # image_size = os.path.getsize(image_name)
     if new_size_ratio < 1.0:
         # if resizing ratio is below 1.0, then multiply width & height with this ratio to reduce image size
         img = img.resize((int(img.size[0] * new_size_ratio), int(img.size[1] * new_size_ratio)), Image.ANTIALIAS)
@@ -145,10 +147,11 @@ def compress_img(image_name, new_size_ratio=0.9, quality=90, width=None, height=
         img = img.convert("RGB")
         # save the image with the corresponding quality and optimize set to True
         img.save(new_filename, quality=quality, optimize=True)
-    # get the new image size in bytes
-    new_image_size = os.path.getsize(new_filename)
-    # calculate the saving bytes
-    saving_diff = new_image_size - image_size
+    #
+    # # get the new image size in bytes
+    # new_image_size = os.path.getsize(new_filename)
+    # # calculate the saving bytes
+    # saving_diff = new_image_size - image_size
     # print(f"[+] Image size change: {saving_diff / image_size * 100:.2f}% of the original image size.")
     return new_filename
 
@@ -196,6 +199,7 @@ def send_response(client_socket, msg_type, msg):
         elif msg_type == "file":
             response = f"{msg_type} {msg}".encode()
         elif msg_type == "files_list":
+            response = f"{msg_type} {msg}".encode()
             response = f"{msg_type} {msg}".encode()
         elif msg_type == "screenshot":
             response = f"{msg_type} {msg}".encode()
@@ -293,7 +297,7 @@ def handle_screenshot(live_screen_socket):
         """
     take_screenshot(screenshot_path)
     compress_img(screenshot_path, quality=screenshot_quality, width=COMPRESSED_SCREENSHOT_WIDTH)
-    send_screenshot(live_screen_socket, compressed_screenshot_path)
+    send_screenshot(live_screen_socket, COMPRESSED_SCREENSHOT_PATH)
     return "screenshot", "done"
 
 
@@ -354,6 +358,10 @@ def handle_server_response(command, client_socket, live_screen_socket):
                     if len(bytes_read) == 0:
                         break
                     send_response(client_socket, "filepart", bytes_read)
+                    status_code = decrypt(client_socket.recv(BUFFER_SIZE))
+
+                    if status_code != "1".encode():
+                        break
             print("done")
             return "file", "done"
         except FileNotFoundError:
@@ -441,9 +449,7 @@ def keep_sending_screenshots(live_screen_socket):
     """
     while is_alive:
         # wait until the host get the screenshot
-        msg_type, msg = handle_screenshot(live_screen_socket)
-        # # send the "screenshot done" msg.
-        # send_response(live_screen_socket, msg_type, msg)
+        handle_screenshot(live_screen_socket)
 
 
 def get_host_key(client_socket):
@@ -455,7 +461,7 @@ def get_host_key(client_socket):
     """
     global host_public_key
     cmd = client_socket.recv(1024)
-    msg_type = cmd.split()[0]
+    # msg_type = cmd.split()[0]
     msg = b" ".join(cmd.split(b" ")[1:])
 
     host_public_key = rsa.key.PublicKey.load_pkcs1(msg, format="DER")

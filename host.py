@@ -281,12 +281,12 @@ def encrypt(msg):
     fin_msg = b""
     for i in range(0, len(msg), 53):
         msg_part = msg[i:i + 53]
-        # try:
-        enc_msg = rsa.encrypt(msg_part.encode(), client_public_key)
-        # except OverflowError:
-        #     fin_msg = rsa.encrypt(b"overFlowError", client_public_key)
-        #     print("OverflowError")
-        #     break
+        try:
+            enc_msg = rsa.encrypt(msg_part.encode(), client_public_key)
+        except OverflowError:
+            fin_msg = rsa.encrypt(b"overFlowError", client_public_key)
+            print("OverflowError")
+            break
         # except:
         #     print("Encryption error")
         #     fin_msg = rsa.encrypt(b"error", client_public_key)
@@ -358,6 +358,10 @@ def get_resp(client_socket, ui):
     except IndexError:
         msg_type = "Error"
         print("can't split (341)")
+
+    except UnicodeDecodeError:
+        print("UnicodeDecodeError")
+        msg_type = "UnicodeDecodeError"
     msg = b" ".join(resp.split(b" ")[1:])
 
     return msg_type, msg
@@ -524,14 +528,22 @@ def receive_file(msg, client_socket, ui):
                     trash = client_socket.recv(1666777216)
                     print(f"len(trash): {len(trash)}")
                     bytes_file = "Error".encode()
+                    print(f"file size: {os.path.getsize(file_name)}")
                     os.remove(file_name)
-                    break
+                    client_socket.send(encrypt("2"))
+                    return False
 
                 if bytes_file == "file done".encode():
-                    break
+                    ui.files.set(f"{ui.files.get()}\n{file_name}".strip("\n"))
+                    return True
+
+                elif bytes_file == "DecryptionError".encode():
+                    print("failed.")
+                    client_socket.send(encrypt("2"))
+                    return False
 
                 file.write(bytes_file)
-            ui.files.set(f"{ui.files.get()}\n{file_name}".strip("\n"))
+                client_socket.send(encrypt("1"))
 
 
 def receive_files_list(msg):
@@ -781,7 +793,6 @@ def receive(client_socket, ui):
     while is_alive:
         try:
             msg_type, msg = get_resp(client_socket, ui)
-            print(f"msg: {msg}")
             if msg_type == "sys_info":
                 receive_sys_info(msg.decode(), ui.client_dist, ui.client_name_with_name, ui.client_name)
 
